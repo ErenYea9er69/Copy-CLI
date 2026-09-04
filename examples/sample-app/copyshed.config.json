@@ -1,0 +1,52 @@
+{
+  "audience": "people signing up for a B2B SaaS product, moderately technical, low patience for fluff",
+  "goals": [
+    "sound confident and specific instead of generic",
+    "reduce reading time on every screen",
+    "keep tone consistent across the whole product"
+  ],
+  "brandVoice": {
+    "tone": ["direct", "confident", "plain"],
+    "formality": "neutral",
+    "person": "second",
+    "allowContractions": true,
+    "sentenceCase": true
+  },
+  "style": {
+    "maxSentenceWords": 16,
+    "forbidEmDash": true,
+    "forbidExclamationFiller": true,
+    "forbidPassiveOpeners": true,
+    "maxSemicolonsPerString": 1
+  },
+  "bannedWords": ["utilize", "leverage", "seamless", "robust", "cutting-edge"],
+  "preferredReplacements": {
+    "customer": "user"
+  },
+  "rewriteMode": "rules",
+  "ai": {
+    "enabled": false,
+    "model": "claude-sonnet-4-6",
+    "apiKeyEnv": "ANTHROPIC_API_KEY",
+    "maxStringsPerBatch": 25,
+    "temperature": 0.2
+  },
+  "targets": {
+    "jsxText": true,
+    "attributes": [
+      "placeholder",
+      "title",
+      "alt",
+      "aria-label",
+      "label",
+      "helperText",
+      "buttonText",
+      "tooltip",
+      "errorMessage",
+      "description"
+    ],
+    "callees": ["t", "i18n.t", "toast", "toast.error", "toast.success", "confirm", "alert"]
+  },
+  "include": ["src/**/*.{js,jsx,ts,tsx}", "locales/**/*.json"],
+  "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**"]
+}
