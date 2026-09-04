@@ -1,7 +1,6 @@
 import { getClient } from "./client.js";
 import { buildSystemPrompt, buildUserMessage } from "./prompt.js";
 import { validateRewrite } from "../rules/validator.js";
-import type Anthropic from "@anthropic-ai/sdk";
 import type { Config } from "../config.js";
 import type { StringCandidate, RewriteResult, RuleViolation } from "../extract/types.js";
 
@@ -27,7 +26,7 @@ function formatFeedback(violations: RuleViolation[]): string {
 }
 
 export async function rewriteCandidate(candidate: StringCandidate, config: Config): Promise<RewriteResult> {
-  const client = getClient();
+  const client = getClient(config);
   const system = buildSystemPrompt(config);
 
   let feedback: string | undefined;
@@ -43,16 +42,8 @@ export async function rewriteCandidate(candidate: StringCandidate, config: Confi
     attempts += 1;
     const userMessage = buildUserMessage(candidate, feedback);
 
-    const response = await client.messages.create({
-      model: config.model,
-      max_tokens: 500,
-      temperature: config.temperature,
-      system,
-      messages: [{ role: "user", content: userMessage }],
-    });
-
-    const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-    const parsed = textBlock ? parseModelJson(textBlock.text) : null;
+    const text = await client.generateText(system, userMessage, config);
+    const parsed = text ? parseModelJson(text) : null;
 
     if (!parsed) {
       lastErrors = [{ rule: "malformed-response", detail: "model did not return valid JSON", severity: "error" }];
