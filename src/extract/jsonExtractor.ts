@@ -1,142 +1,68 @@
-import type { CopyString, ExtractionResult } from "./types.js";
+import { nanoid } from "nanoid";
+import type { StringCandidate } from "./types.js";
 
 /**
- * JSON.parse gives us values but throws away source positions, and we need
- * exact byte offsets to splice a rewrite back into the file safely. This is
- * a small hand-rolled scanner: it walks the same grammar JSON.parse does,
- * but records the start/end of every string it reads along the way.
+ * JSON has no AST offsets from JSON.parse, so this walks the raw text with
+ * a small scanner to recover the exact start/end of each leaf string value.
+ * That is what lets the patcher rewrite one value in place without
+ * reformatting the rest of the file.
  */
-class JsonScanner {
-  private i = 0;
-  constructor(private src: string) {}
-
-  private error(msg: string): never {
-    throw new Error(`Invalid JSON at offset ${this.i}: ${msg}`);
-  }
-
-  private skipWs() {
-    while (this.i < this.src.length && /\s/.test(this.src[this.i]!)) this.i++;
-  }
-
-  private peek(): string {
-    return this.src[this.i]!;
-  }
-
-  parseValue(path: string, onString: (start: number, end: number, value: string, path: string) => void): void {
-    this.skipWs();
-    const ch = this.peek();
-    if (ch === "{") return this.parseObject(path, onString);
-    if (ch === "[") return this.parseArray(path, onString);
-    if (ch === '"') {
-      const { start, end, value } = this.parseString();
-      onString(start, end, value, path);
-      return;
-    }
-    // number, boolean, null - skip over the token, we don't rewrite these.
-    while (this.i < this.src.length && !/[,\]}\s]/.test(this.src[this.i]!)) this.i++;
-  }
-
-  private parseObject(path: string, onString: (s: number, e: number, v: string, p: string) => void) {
-    this.i++; // {
-    this.skipWs();
-    if (this.peek() === "}") {
-      this.i++;
-      return;
-    }
-    while (true) {
-      this.skipWs();
-      if (this.peek() !== '"') this.error("expected string key");
-      const { value: key } = this.parseString();
-      this.skipWs();
-      if (this.peek() !== ":") this.error("expected ':'");
-      this.i++;
-      const childPath = path ? `${path}.${key}` : key;
-      this.parseValue(childPath, onString);
-      this.skipWs();
-      if (this.peek() === ",") {
-        this.i++;
-        continue;
-      }
-      if (this.peek() === "}") {
-        this.i++;
-        break;
-      }
-      this.error("expected ',' or '}'");
-    }
-  }
-
-  private parseArray(path: string, onString: (s: number, e: number, v: string, p: string) => void) {
-    this.i++; // [
-    this.skipWs();
-    if (this.peek() === "]") {
-      this.i++;
-      return;
-    }
-    let index = 0;
-    while (true) {
-      this.parseValue(`${path}[${index}]`, onString);
-      index++;
-      this.skipWs();
-      if (this.peek() === ",") {
-        this.i++;
-        continue;
-      }
-      if (this.peek() === "]") {
-        this.i++;
-        break;
-      }
-      this.error("expected ',' or ']'");
-    }
-  }
-
-  private parseString(): { start: number; end: number; value: string } {
-    const start = this.i;
-    this.i++; // opening quote
-    let value = "";
-    while (this.i < this.src.length && this.src[this.i] !== '"') {
-      if (this.src[this.i] === "\\") {
-        const next = this.src[this.i + 1];
-        const map: Record<string, string> = { n: "\n", t: "\t", r: "\r", '"': '"', "\\": "\\", "/": "/" };
-        value += map[next!] ?? next ?? "";
-        this.i += 2;
-      } else {
-        value += this.src[this.i];
-        this.i++;
-      }
-    }
-    this.i++; // closing quote
-    const end = this.i;
-    return { start: start + 1, end: end - 1, value };
-  }
-
-  run(onString: (s: number, e: number, v: string, p: string) => void) {
-    this.parseValue("", onString);
-  }
-}
-
-export function extractFromJson(file: string, source: string): ExtractionResult {
-  const strings: CopyString[] = [];
-  const lineAt = (index: number): number => source.slice(0, index).split("\n").length;
-
+export function extractFromJson(source: string, filePath: string): StringCandidate[] {
+  let data: unknown;
   try {
-    const scanner = new JsonScanner(source);
-    scanner.run((start, end, value, path) => {
-      const trimmed = value.trim();
-      if (trimmed.length < 2) return;
-      strings.push({
-        file,
-        line: lineAt(start),
-        start,
-        end,
-        text: value,
-        kind: "json-value",
-        context: path,
-        quote: '"'
-      });
-    });
+    data = JSON.parse(source);
   } catch {
-    return { file, originalContent: source, strings: [] };
+    return [];
+  }
+  if (typeof data !== "object" || data === null) return [];
+
+  const candidates: StringCandidate[] = [];
+  const cursor = { pos: 0 };
+
+  function findNextString(fromValue: string): { start: number; end: number } | null {
+    // Search forward from the current cursor for a JSON string literal whose
+    // decoded value equals fromValue. Skips over keys by requiring the match
+    // sits after a colon at this scan position, which is good enough for the
+    // flat/nested locale-file shape this extractor targets.
+    const encoded = JSON.stringify(fromValue);
+    const idx = source.indexOf(encoded, cursor.pos);
+    if (idx === -1) return null;
+    cursor.pos = idx + encoded.length;
+    return { start: idx + 1, end: idx + encoded.length - 1 };
   }
 
-  return { file, originalContent: source, strings };
+  function walk(node: unknown, keyPath: string[]) {
+    if (typeof node === "string") {
+      const found = findNextString(node);
+      if (!found) return;
+      const before = source.slice(0, found.start);
+      const line = before.split("\n").length;
+      const column = found.start - before.lastIndexOf("\n");
+      const trimmed = node.trim();
+      if (trimmed.length < 2) return;
+      candidates.push({
+        id: nanoid(10),
+        file: filePath,
+        start: found.start,
+        end: found.end,
+        line,
+        column,
+        value: node,
+        source: "json-value",
+        contextName: keyPath.join("."),
+        contextSnippet: keyPath.join(".") + ": " + JSON.stringify(node).slice(0, 160),
+      });
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.forEach((item, i) => walk(item, [...keyPath, String(i)]));
+      return;
+    }
+    if (typeof node === "object" && node !== null) {
+      for (const [k, v] of Object.entries(node)) walk(v, [...keyPath, k]);
+    }
+  }
+
+  walk(data, []);
+  return candidates;
 }

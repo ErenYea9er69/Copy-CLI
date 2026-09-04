@@ -1,54 +1,57 @@
 {
-  "audience": "developers evaluating a B2B SaaS analytics tool, moderately technical, low patience for fluff",
-  "goals": [
-    "sound confident and specific instead of generic",
-    "reduce reading time on every screen",
-    "keep tone consistent between marketing pages and in-app copy"
+  "target_audience": "developers evaluating a B2B analytics tool",
+  "brand_voice": "plain, direct, a little dry, no hype",
+  "goals": "clarity first, reduce support tickets, keep trust with technical users",
+  "extra_banned_words": ["synergy", "cutting-edge"],
+  "extra_banned_phrases": ["at the end of the day"],
+  "include": [
+    "src/**/*.{js,jsx,ts,tsx}",
+    "**/locales/**/*.json",
+    "**/i18n/**/*.json"
   ],
-  "brandVoice": {
-    "tone": ["direct", "confident", "plain"],
-    "formality": "neutral",
-    "person": "second",
-    "allowContractions": true,
-    "sentenceCase": true
-  },
-  "style": {
-    "maxSentenceWords": 20,
-    "forbidEmDash": true,
-    "forbidExclamationFiller": true,
-    "forbidPassiveOpeners": true,
-    "maxSemicolonsPerString": 1
-  },
-  "bannedWords": ["utilize", "leverage", "seamless", "robust", "cutting-edge", "synergy"],
-  "preferredReplacements": {
-    "use": "use",
-    "customer": "user",
-    "click": "select"
-  },
-  "rewriteMode": "rules",
-  "ai": {
-    "enabled": false,
-    "model": "claude-sonnet-4-6",
-    "apiKeyEnv": "ANTHROPIC_API_KEY",
-    "maxStringsPerBatch": 25,
-    "temperature": 0.2
-  },
-  "targets": {
-    "jsxText": true,
-    "attributes": [
-      "placeholder",
-      "title",
-      "alt",
-      "aria-label",
-      "label",
-      "helperText",
-      "buttonText",
-      "tooltip",
-      "errorMessage",
-      "description"
-    ],
-    "callees": ["t", "i18n.t", "toast", "toast.error", "toast.success", "confirm", "alert"]
-  },
-  "include": ["src/**/*.{js,jsx,ts,tsx}", "locales/**/*.json", "**/*.i18n.json"],
-  "exclude": ["**/node_modules/**", "**/dist/**", "**/build/**", "**/*.test.*", "**/*.spec.*"]
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/*.d.ts"
+  ],
+  "attribute_allowlist": [
+    "title",
+    "label",
+    "placeholder",
+    "alt",
+    "aria-label",
+    "aria-description",
+    "description",
+    "tooltip",
+    "helperText",
+    "errorText",
+    "buttonText"
+  ],
+  "key_allowlist": [
+    "title",
+    "label",
+    "placeholder",
+    "description",
+    "message",
+    "heading",
+    "subtitle",
+    "tooltip",
+    "error",
+    "success",
+    "warning",
+    "cta",
+    "header",
+    "footer",
+    "body",
+    "text",
+    "copy"
+  ],
+  "call_allowlist": ["t", "i18n.t", "formatMessage", "translate"],
+  "model": "claude-sonnet-5",
+  "max_retries": 2,
+  "temperature": 0.4
 }

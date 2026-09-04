@@ -1,25 +1,36 @@
-export type SourceKind = "jsx-text" | "jsx-attribute" | "call-argument" | "json-value";
+export type CandidateSource = "jsx-text" | "jsx-attribute" | "call-argument" | "object-property" | "json-value";
 
-export interface CopyString {
-  /** Absolute file path this string came from. */
+export interface StringCandidate {
+  id: string;
   file: string;
-  /** 1-based line number, for human-readable output. */
-  line: number;
-  /** Byte offsets into the original file content, used for safe splicing. */
+  /** Byte offset in the original file text where the replaceable content starts. */
   start: number;
+  /** Byte offset where it ends (exclusive). */
   end: number;
-  /** The raw text content, without surrounding quotes. */
-  text: string;
-  /** Where the string was found, for reporting and rule selection. */
-  kind: SourceKind;
-  /** Extra context: attribute name, callee name, or JSON key path. */
-  context: string;
-  /** Quote character to reconstruct the token on write-back. Undefined for JSX text. */
-  quote?: '"' | "'" | "`";
+  line: number;
+  column: number;
+  /** The raw string value, unescaped, as a human would read it. */
+  value: string;
+  /** Where the string was found, for the model's context and for filtering. */
+  source: CandidateSource;
+  /** Attribute name, call callee name, or object key name, when known. */
+  contextName?: string;
+  /** A short snippet of surrounding code for the model's context. */
+  contextSnippet: string;
 }
 
-export interface ExtractionResult {
-  file: string;
-  originalContent: string;
-  strings: CopyString[];
+export interface RuleViolation {
+  rule: string;
+  detail: string;
+  severity: "error" | "warning";
+}
+
+export interface RewriteResult {
+  candidate: StringCandidate;
+  rewrite: string;
+  rationale: string;
+  attempts: number;
+  status: "ok" | "needs_review" | "unchanged" | "failed";
+  errors: RuleViolation[];
+  warnings: RuleViolation[];
 }

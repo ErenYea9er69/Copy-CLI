@@ -1,194 +1,203 @@
 # CopyShed
 
-CopyShed finds the user-facing strings in your codebase and rewrites them to
-match a brand voice, audience, and set of goals you define once in a config
-file. It reads JSX text, targeted JSX/HTML attributes, call arguments like
-`toast.error(...)`, and locale JSON files. Every rewrite is computed by a
-deterministic rule engine by default, so the same input always produces the
-same output, with no API key and no network call required. An optional AI
-engine (Anthropic API) can replace the rule engine for teams that want it.
+CopyShed finds user-facing strings in your code and rewrites them to match
+your target audience, your brand voice, and a strict house writing style.
+It runs in the terminal. There is no server and no editor plugin; the CLI
+is the whole product.
 
-## Why deterministic by default
+## How it works
 
-An LLM call gives a different answer on every run and needs a live API key
-to function at all. That breaks two things a copy tool needs to support: a
-CI lint step that has to be reproducible, and an editor "on save" hook that
-has to be fast and cheap enough to run on every keystroke-adjacent save. The
-rule engine handles the mechanical, high-confidence fixes (banned words,
-filler phrases, em dashes, semicolon budgets, contraction policy, sentence
-case, generic boilerplate phrases) instantly and for free. The optional AI
-engine is there for teams who want fuller rewrites and are fine trading
-determinism and cost for that.
+The tool has two halves, and they do different jobs on purpose.
 
-## How rewrites get back into your files safely
+Extraction and rule enforcement are deterministic. CopyShed parses your
+JS, JSX, TS, TSX, and JSON locale files with Babel, finds strings sitting
+in places that usually hold UI copy (JSX text, attributes like `label` or
+`placeholder`, object keys like `title` or `message`, i18n calls like
+`t(...)`), and checks them against a fixed rule set with plain string and
+regex matching. That check has no ambiguity: a banned word is either
+present or it is not.
 
-CopyShed never uses find-and-replace on raw file text. It parses each file
-with a real parser (Babel for JS/JSX/TS/TSX, a small hand-written scanner for
-JSON) and records the exact byte offset of every string it finds. When you
-apply a change, it splices only that offset range using
-[magic-string](https://github.com/Rich-Harris/magic-string), leaving
-everything else in the file, including formatting and unrelated code,
-untouched.
+Rewriting is not deterministic, because turning "Unlock your dashboard's
+full potential" into something plain and specific requires actual
+language understanding, not pattern matching. CopyShed sends each
+candidate string to Claude with your brand voice, audience, and the full
+rule set as instructions. The model's answer then goes back through the
+same deterministic checker. If it breaks a hard rule, CopyShed sends the
+specific violation back to the model and asks again, up to a retry limit
+you control. A string that still fails after retries is marked "needs
+review" instead of applied silently. You always see a diff before
+anything touches disk, and nothing is written unless you accept it or
+pass `--yes`.
 
-## Install
+### Hard rules vs. soft rules
 
-```bash
+Some of the writing rules you gave are things a script can verify with
+certainty: no em dash, no markdown, no banned word or phrase, at most one
+semicolon. CopyShed calls these hard rules. It blocks a suggestion that
+fails one.
+
+Other rules describe good prose but resist mechanical verification:
+active voice, sentence rhythm, committing to a view instead of hedging.
+CopyShed still puts these in the model's instructions, and it runs a few
+light heuristics that surface a warning (an exclamation mark, a phrase
+that reads like passive voice, a "not X, but Y" construction). Those are
+warnings for a human to glance at, not blocks. Say a check is a heuristic
+and not a guarantee; a tool that claims otherwise is lying to you.
+
+## Setup
+
+Requires Node 18.17 or newer.
+
+```
+cd copyshed
 npm install
 npm run build
-npm link          # optional: puts `copyshed` on your PATH
 ```
 
-`dist/cli.cjs` is a single self-contained file (no `node_modules` needed at
-runtime). You can also run it directly:
+Link it so `copyshed` works as a command anywhere:
 
-```bash
-node dist/cli.cjs --help
+```
+npm link
 ```
 
-## Quick start
+Or run it without linking, from inside this folder:
 
-```bash
-cd your-project
-copyshed init                 # writes copyshed.config.json
-# edit audience, brandVoice, and bannedWords in the config
-copyshed scan                 # preview only, writes nothing
-copyshed apply --yes          # write the changes
-copyshed lint                 # CI-friendly check, exits 1 if issues remain
 ```
+node dist/cli.js <command>
+```
+
+Add your Anthropic API key. Copy `.env.example` to `.env` in whatever
+project you run CopyShed against, or export the variable directly:
+
+```
+cp .env.example .env
+# then edit .env and set ANTHROPIC_API_KEY
+```
+
+`scan` and `check` never call the API and work with no key at all.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `copyshed init` | Writes a starter `copyshed.config.json` in the current directory. |
-| `copyshed scan` | Extracts and previews rewrites. Read-only. |
-| `copyshed apply` | Previews, then writes changes. Requires `--yes` to actually write; without it, it prints the same preview as `scan` and stops. |
-| `copyshed lint` | Reports every string that still needs a fix or has an unresolved violation (banned word, over the word limit). Exits with code `1` if anything remains, for CI. |
-| `copyshed watch` | Re-scans a file on save. Pass `--apply` to write automatically instead of only previewing. This is what the VS Code extension shells out to. |
+### `copyshed init`
 
-Useful flags: `--config <path>` to point at a config file outside the
-current directory, `--file <path>` to target one file instead of the
-configured globs.
+Writes `copyshed.config.json` in the current directory. Prompts for your
+target audience, brand voice, and goals, or pass `-y` to accept the
+defaults and edit the file by hand afterward.
 
-## Config file
+### `copyshed scan [paths...]`
 
-`copyshed.config.json` is validated against a schema on load
-(`src/config/schema.ts`), so a typo or an out-of-range value fails fast with
-a clear message instead of silently doing nothing. See
-`copyshed.config.example.json` for a complete, commented example, and
-`examples/sample-app/copyshed.config.json` for the one used in the demo
-below. The main fields:
+Lists every candidate string CopyShed finds, with no API call. Good for
+checking your `include`/`exclude`/allowlist settings before spending
+tokens on a real rewrite pass. Add `--json` for machine-readable output.
 
-- **audience** / **goals**: free text describing who reads this copy and
-  what it is trying to do. Used by the AI engine's prompt; read by humans
-  reviewing the config in a pull request.
-- **brandVoice**: `tone` (array of words like `"direct"`, `"playful"`),
-  `formality`, `person`, `allowContractions`, `sentenceCase`.
-- **style**: `maxSentenceWords`, `forbidEmDash`, `forbidExclamationFiller`,
-  `maxSemicolonsPerString`.
-- **bannedWords**: words the rule engine flags as violations. It does not
-  guess a replacement for these, since a wrong automatic guess is worse than
-  a flag a human resolves. Use `preferredReplacements` for anything you want
-  swapped automatically.
-- **preferredReplacements**: direct word swaps applied everywhere, e.g.
-  `{"customer": "user"}`.
-- **rewriteMode**: `"rules"` (default) or `"ai"`.
-- **ai**: model, which environment variable holds the API key, batch size.
-  Only used when `rewriteMode` is `"ai"` and `ai.enabled` is `true`.
-- **targets**: which JSX attributes and call names count as user-facing
-  copy. Add your own, e.g. `"tooltip"`, `"emptyStateText"`.
-- **include** / **exclude**: glob patterns, same syntax as
-  [fast-glob](https://github.com/mrmlnc/fast-glob).
+### `copyshed check [paths...]`
 
-## Demo
-
-`examples/sample-app` has a small React form, a notifications file, and a
-locale JSON file, all written the way generic AI-drafted copy tends to come
-out: filler phrases, an em dash, inconsistent exclamation marks, banned
-words, semicolon-stitched sentences. Run:
-
-```bash
-cd examples/sample-app
-node ../../dist/cli.cjs scan
-```
-
-A few representative rewrites it proposes:
+Runs the hard rules against copy that is already in your codebase. No API
+key needed, no network call, safe to run in CI or a pre-commit hook.
+Exits with code 1 if any string breaks a hard rule, 0 otherwise. This is
+the command that gives you "team style guide enforcement across the
+codebase" without spending a single API call.
 
 ```
-"Welcome!"                                          -> "Welcome."
-"In order to get the most out of the product, ..."  -> "To get the most out of the product, ..."
-"Oops! Something went wrong"                         -> "That did not work"
-"...at this point in time — please try again later"  -> "...now, please try again later"
-"Choose a customer password"                         -> "Choose a user password"
+copyshed check --json
 ```
 
-And two it correctly refuses to auto-fix, flagging them instead:
+### `copyshed rewrite [paths...]`
 
-```
-"Are you sure you want to utilize the delete feature on this item?"
-  ! contains banned word "utilize" (no automatic replacement configured)
+The main flow. Extracts candidates, sends each to Claude, validates the
+result, retries on failure, then walks you through an interactive review:
+accept, edit, skip, accept all remaining clean suggestions, or quit and
+save progress. Accepted changes get written back immediately, in place,
+without reformatting the rest of the file.
 
-"Delete this item permanently, this action cannot be undone and there is no way to get it back"
-  ! exceeds max sentence length (18 > 16 words)
-```
+Flags:
 
-Run `node ../../dist/cli.cjs apply --yes` to write the fixable ones, then
-`node ../../dist/cli.cjs lint` to see the two that still need a human.
+- `-y, --yes` — non-interactive. Applies every suggestion that passes
+  validation outright and skips anything that needed a retry or came back
+  unchanged. Use this in a script or an editor's on-save hook.
+- `--dry-run` — calls the model and saves a report to `.copyshed/`, but
+  never touches a file and never prompts. Pair with `copyshed apply`
+  later. This is the "safe preview" step.
+- `-m, --model <name>` — override the model for this run.
+- `--max-retries <n>` — override the retry count for this run.
+- `-c, --config <path>` — use a config file somewhere other than
+  `./copyshed.config.json`.
 
-## CI enforcement
+### `copyshed apply`
 
-```yaml
-# .github/workflows/copy-lint.yml
-- run: npx copyshed lint
-```
+Reviews and applies a report saved by `rewrite --dry-run`. This is the
+"one-click apply" step, and it is what an editor's on-save/on-accept
+integration would call: run `rewrite --dry-run --paths <file>` when the
+file saves, show the diff in your own UI, and call
+`apply --yes --paths <file>` when the person accepts it.
 
-Fails the build the same way `eslint` or `tsc --noEmit` would, and prints
-exactly which strings need attention and why.
+- `-r, --report <path>` — a specific report file. Defaults to the most
+  recent one.
+- `-y, --yes` — apply every suggestion already accepted or clean, no
+  prompts.
+- `-p, --paths <patterns...>` — only apply entries whose file matches.
 
-## Editor integration
+## Configuration
 
-`editor/vscode-extension` is a working skeleton, not a published extension.
-It shells out to the same CLI documented above (`copyshed scan --file` and
-`copyshed apply --yes --file`) from an output channel and an
-`onDidSaveTextDocument` listener, gated behind a `copyshed.applyOnSave`
-setting that defaults to off. To try it: open that folder in VS Code and
-press F5. For any other editor, `copyshed watch --apply` gives you the same
-on-save loop from a terminal.
+`copyshed.config.json`, written by `init` or edited by hand. See
+`copyshed.config.example.json` for a filled-in reference.
 
-## Known limitations
+| Key                    | What it controls                                                      |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `target_audience`      | Who reads this copy. Goes straight into the model's instructions.     |
+| `brand_voice`          | A few words describing tone.                                          |
+| `goals`                | What the copy should accomplish.                                      |
+| `extra_banned_words`   | Project-specific words on top of the built-in list.                   |
+| `extra_banned_phrases` | Project-specific phrases on top of the built-in list.                 |
+| `include` / `exclude`  | Glob patterns for which files to scan.                                |
+| `attribute_allowlist`  | JSX attribute names treated as UI copy (`label`, `placeholder`, ...). |
+| `key_allowlist`        | Object/JSON key names treated as UI copy (`title`, `message`, ...).   |
+| `call_allowlist`       | Function names whose first string argument counts (`t`, `i18n.t`).    |
+| `model`                | Which Claude model to call.                                           |
+| `max_retries`          | How many times to send validation feedback back to the model.         |
+| `temperature`          | Sampling temperature for the rewrite call.                            |
 
-- Multi-line JSX text keeps its original internal line breaks and
-  indentation after a rewrite, since only the trimmed text content is
-  replaced, not the surrounding whitespace. Long paragraphs sometimes need a
-  manual reflow after a rewrite that changes their length.
-- Template literals with interpolation (`` `Hello ${name}` ``) are not
-  extracted yet. Static string literals and JSX text are covered; add
-  interpolated templates by extending `src/extract/jsxExtractor.ts`.
-- The AI engine batches strings per request and falls back to the rule
-  engine for any batch that fails or returns malformed JSON, so a network
-  or API issue degrades gracefully instead of crashing the run.
+The banned word and phrase list itself, and the hard/soft rule
+descriptions, live in `src/rules/writingRules.ts`. They are not
+config-driven on purpose: they are the floor every project shares.
+`extra_banned_words` and `extra_banned_phrases` only ever add to that
+floor, never subtract from it.
+
+## What this does not do
+
+It does not touch Python, Go, Rust, or any language outside the
+JS/TS/JSX/TSX/JSON family; the extractor is Babel-based, so it stops
+there for now. It does not guarantee the soft rules; it enforces the hard
+ones and flags the rest for a human. It does not run inside an editor by
+itself; the `--dry-run` plus `apply` pair is the seam a plugin would call,
+but writing that plugin is a separate project. And it will not fix a
+string whose meaning depends on business context CopyShed does not have;
+`target_audience`, `brand_voice`, and `goals` are the only context you
+get to hand it, so a vague config produces vague rewrites.
 
 ## Project layout
 
 ```
 src/
-  cli.ts               entry point, command wiring
-  config/               schema + loader for copyshed.config.json
-  extract/               JSX/TS extractor (Babel) and JSON extractor
-  rewrite/               rule engine (default) and AI engine (optional)
-  diff/                  colored preview rendering
-  apply/                 safe write-back via magic-string
-  lint/                  CI-mode reporting
-  watch/                 on-save loop used by the CLI and the editor extension
-tests/                  vitest unit tests for extraction and the rule engine
-examples/sample-app/    small demo project used above
-editor/vscode-extension/  skeleton extension that shells out to the CLI
+  cli.ts              command wiring
+  config.ts            config schema, defaults, loader
+  rules/
+    writingRules.ts    the house style, baked in
+    validator.ts        hard-rule checker + soft-rule heuristics
+  extract/
+    jsExtractor.ts      Babel-based extraction for JS/TS/JSX/TSX
+    jsonExtractor.ts     leaf-string extraction for JSON locale files
+    extractor.ts         dispatch by file extension
+  ai/
+    client.ts            Anthropic SDK wrapper
+    prompt.ts             system/user prompt construction
+    rewrite.ts            call + validate + retry loop
+  patch/
+    applyPatch.ts         MagicString-based in-place file patching
+  cache/
+    cache.ts              report read/write for dry-run + apply
+  ui/
+    diff.ts, table.ts, prompts.ts   terminal rendering and review flow
+  commands/
+    init.ts, scan.ts, rewrite.ts, apply.ts, check.ts
 ```
-
-## Tests
-
-```bash
-npm test
-```
-#   C o p y - C L I  
- 
