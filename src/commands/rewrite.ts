@@ -13,29 +13,35 @@ export async function rewriteCommand(args: string[]) {
 
   const files = await resolveFiles(paths, config);
   if (files.length === 0) {
-    log.warn("No files matched. Check your include/exclude patterns in copyshed.config.json.");
+    log.header("rewrite");
+    log.blank();
+    log.warn("No files matched your configured patterns. Check copyshed.config.json.");
+    log.blank();
     return;
   }
 
   const candidates = await extractFiles(files, config);
   if (candidates.length === 0) {
-    log.info("No candidate strings found.");
+    log.header("rewrite", `${files.length} file(s)`);
+    log.blank();
+    log.info("No candidate UI strings found to rewrite.");
+    log.blank();
     return;
   }
 
   log.header("rewrite", `${candidates.length} string(s)`, `${files.length} file(s)`, `model: ${config.model}`);
   log.blank();
 
-  const spinner = createSpinner("Calling the model...");
+  const spinner = createSpinner("Analyzing copy and crafting improvements...");
   spinner.start();
   const startedAt = Date.now();
-  
+
   const results = await rewriteCandidates(candidates, config, (done, total, current) => {
     spinner.text = spinnerProgress(done, total, `${current.file}:${current.line}`, startedAt);
   });
-  
+
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-  spinner.succeed(`Model finished  ${palette.muted(`(${elapsed}s)`)}`);
+  spinner.succeed(`Copy generation complete  ${palette.muted(`(${elapsed}s)`)}`);
   log.blank();
 
   const ok = results.filter((r) => r.status === "ok").length;
@@ -44,19 +50,19 @@ export async function rewriteCommand(args: string[]) {
   const failed = results.filter((r) => r.status === "failed").length;
 
   const summaryLines = [
-    `${palette.success(sym.dot)} ${ok} clean`,
-    `${palette.muted(sym.dot)} ${unchanged} unchanged`,
-    `${palette.danger(sym.dot)} ${needsReview} need review`,
-    `${palette.warn(sym.dot)} ${failed} failed`,
+    `${palette.success(sym.tick)} ${ok} clean & ready`,
+    `${palette.muted(sym.circle)} ${unchanged} unchanged (already aligned)`,
+    `${palette.warn(sym.warn)} ${needsReview} require review`,
+    `${palette.danger(sym.cross)} ${failed} failed to process`,
   ];
-  
-  const tone = needsReview > 0 || failed > 0 ? "warn" as const : "success" as const;
+
+  const tone = needsReview > 0 || failed > 0 ? ("warn" as const) : ("success" as const);
   log.block("Summary", summaryLines, tone);
   log.blank();
 
   const reportPath = await writeReport(results);
-  log.ok(`Saved suggestions to ${reportPath} without touching any source file.`);
-  log.info(`Run ${palette.accent("/apply")} to review and apply them automatically.`);
+  log.ok(`Saved suggestions to ${reportPath} (source files untouched).`);
+  log.info(`Run ${palette.accent("/apply")} to step through and apply them.`);
   log.blank();
   log.status(`model: ${config.model}`, `${elapsed}s`, `${candidates.length} strings`);
 }
