@@ -4,15 +4,20 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import chalk from "chalk";
-import { Command } from "commander";
+import * as readline from "node:readline/promises";
+
 import { initCommand } from "./commands/init.js";
 import { scanCommand } from "./commands/scan.js";
 import { rewriteCommand } from "./commands/rewrite.js";
 import { applyCommand } from "./commands/apply.js";
 import { checkCommand } from "./commands/check.js";
 import { auditCommand } from "./commands/audit.js";
+
 import { log } from "./utils/logger.js";
 import { banner, palette, sym } from "./ui/theme.js";
+import { loadConfig, type Config } from "./config.js";
+import { getClient } from "./ai/client.js";
+import { withSpinner } from "./ui/spinner.js";
 
 function getVersion(): string {
   try {
@@ -25,107 +30,131 @@ function getVersion(): string {
 }
 
 const version = getVersion();
-const program = new Command();
 
-const EXAMPLES = [
-  ["copyshed init", "create copyshed.config.json in this project"],
-  ["copyshed scan src/", "list user-facing strings, no API call"],
-  ["copyshed check", "CI gate: fail on banned words / em dashes"],
-  ["copyshed audit --threshold 70", "score existing copy for clarity"],
-  ["copyshed rewrite src/ -y", "rewrite copy, auto-accept clean results"],
-  ["copyshed apply", "review a saved dry-run report and apply it"],
-] as const;
-
-function examplesBlock(): string {
-  const lines = EXAMPLES.map(
-    ([cmd, desc]) => `  ${palette.accent(cmd.padEnd(34))}${chalk.dim(desc)}`
-  );
-  return [chalk.bold.white("Examples:"), ...lines].join("\n");
-}
-
-program
-  .name("copyshed")
-  .description(
-    "Find user-facing strings in your code and rewrite them to match your brand voice and a strict house style."
-  )
-  .version(version, "-v, --version", "print the current version")
-  .addHelpText("beforeAll", () => `\n${banner(version)}\n`)
-  .addHelpText("afterAll", () => `\n${examplesBlock()}\n`)
-  .showHelpAfterError(chalk.dim("(run with --help for usage)"));
-
-program
-  .command("init")
-  .description("create a copyshed.config.json in the current project")
-  .option("-y, --yes", "skip prompts and write defaults")
-  .action(async (opts) => {
-    await initCommand(opts);
-  });
-
-program
-  .command("scan")
-  .description("list user-facing strings found in the given paths, without calling the model")
-  .argument("[paths...]", "glob patterns to scan, defaults to the config's include list")
-  .option("-c, --config <path>", "path to copyshed.config.json")
-  .option("--json", "print machine-readable JSON instead of a table")
-  .action(async (paths, opts) => {
-    await scanCommand(paths, opts);
-  });
-
-program
-  .command("rewrite")
-  .description("rewrite candidate strings to match the house style, then review and apply them")
-  .argument("[paths...]", "glob patterns to scan, defaults to the config's include list")
-  .option("-c, --config <path>", "path to copyshed.config.json")
-  .option("-m, --model <name>", "override the model from config")
-  .option("--max-retries <n>", "override retry count for failed validation", (v) => parseInt(v, 10))
-  .option("-y, --yes", "non-interactive: accept every suggestion that passes validation, skip the rest")
-  .option("--dry-run", "call the model and save a report, but do not touch any file or prompt")
-  .action(async (paths, opts) => {
-    await rewriteCommand(paths, opts);
-  });
-
-program
-  .command("apply")
-  .description("review and apply a report saved by `rewrite --dry-run`")
-  .option("-r, --report <path>", "path to a specific report file, defaults to the latest")
-  .option("-y, --yes", "non-interactive: apply every suggestion already marked accepted or clean")
-  .option("-p, --paths <patterns...>", "only apply entries whose file matches one of these")
-  .action(async (opts) => {
-    await applyCommand(opts);
-  });
-
-program
-  .command("check")
-  .description(
-    "deterministic style guide gate: fails if banned words, em dashes, or markdown show up in existing copy. No API key needed, safe for CI."
-  )
-  .argument("[paths...]", "glob patterns to scan, defaults to the config's include list")
-  .option("-c, --config <path>", "path to copyshed.config.json")
-  .option("--json", "print machine-readable JSON instead of a table")
-  .action(async (paths, opts) => {
-    await checkCommand(paths, opts);
-  });
-
-program
-  .command("audit")
-  .description(
-    "score existing copy for clarity and specificity (reading grade, passive voice, vague quantifiers). No API key needed, safe for CI."
-  )
-  .argument("[paths...]", "glob patterns to scan, defaults to the config's include list")
-  .option("-c, --config <path>", "path to copyshed.config.json")
-  .option("--json", "print machine-readable JSON instead of a table")
-  .option("--threshold <n>", "minimum passing clarity score, 0-100", (v) => parseInt(v, 10))
-  .action(async (paths, opts) => {
-    await auditCommand(paths, opts);
-  });
-
-if (process.argv.length <= 2) {
-  program.outputHelp();
-  process.exit(0);
-}
-
-program.parseAsync(process.argv).catch((err) => {
+function showHelp() {
   log.blank();
-  log.block("Something went wrong", [palette.danger(err?.message ?? String(err))], "danger");
-  process.exitCode = 1;
+  log.block("Copyshed Commands", [
+    `${palette.accent("/init".padEnd(20))} ${chalk.dim("Auto-generate a smart configuration file")}`,
+    `${palette.accent("/scan [paths]".padEnd(20))} ${chalk.dim("Find user-facing strings in your code")}`,
+    `${palette.accent("/rewrite [paths]".padEnd(20))} ${chalk.dim("Generate AI improvements (dry-run mode)")}`,
+    `${palette.accent("/apply".padEnd(20))} ${chalk.dim("Apply the safe suggestions from /rewrite")}`,
+    `${palette.accent("/check".padEnd(20))} ${chalk.dim("Fail on banned words or em dashes")}`,
+    `${palette.accent("/audit".padEnd(20))} ${chalk.dim("Score existing copy for clarity")}`,
+    `${palette.accent("/help".padEnd(20))} ${chalk.dim("Show this message")}`,
+    `${palette.accent("/exit".padEnd(20))} ${chalk.dim("Quit the Copyshed session")}`,
+    "",
+    "Or just type any question to chat with your Designer-Turned-Copywriter assistant!",
+  ], "accent");
+  log.blank();
+}
+
+async function startREPL() {
+  console.log(`\n${banner(version)}\n`);
+  
+  // Status bar simulation at startup
+  let config: Config;
+  try {
+    config = await loadConfig();
+    const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY || process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      log.warn("No API key detected in .env. Some commands may fail.");
+    }
+  } catch (e) {
+    log.error("Could not load config. Run /init to set it up.");
+  }
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+    prompt: sym.user + " ",
+  });
+
+  const messages: { role: "user" | "assistant"; content: string }[] = [];
+
+  rl.prompt();
+
+  rl.on("line", async (line) => {
+    const input = line.trim();
+    if (!input) {
+      rl.prompt();
+      return;
+    }
+
+    const args = input.split(" ").filter(Boolean);
+    const cmd = args[0].toLowerCase();
+    
+    // Command Router
+    try {
+      if (cmd.startsWith("/")) {
+        switch (cmd) {
+          case "/init":
+            await initCommand(args.slice(1));
+            break;
+          case "/scan":
+            await scanCommand(args.slice(1));
+            break;
+          case "/rewrite":
+            await rewriteCommand(args.slice(1));
+            break;
+          case "/apply":
+            await applyCommand(args.slice(1));
+            break;
+          case "/check":
+            await checkCommand(args.slice(1));
+            break;
+          case "/audit":
+            await auditCommand(args.slice(1));
+            break;
+          case "/help":
+            showHelp();
+            break;
+          case "/exit":
+          case "/quit":
+            log.info("Goodbye!");
+            process.exit(0);
+          default:
+            log.error(`Unknown command: ${cmd}. Type /help for a list of commands.`);
+        }
+      } else {
+        // Conversational Chat Fallback
+        config = await loadConfig();
+        const client = getClient(config);
+        
+        messages.push({ role: "user", content: input });
+        
+        const systemPrompt = `You are Copyshed, a bold Designer-Turned-Copywriter AI assistant running in a terminal REPL.
+Your job is to help the user write, refine, and audit UI copy. Be memorable, creative, and brutally honest about bad copy. Avoid generic AI slop. Give punchy, actionable advice.`;
+
+        const { result } = await withSpinner("Thinking...", async () => {
+          return client.generateChat(systemPrompt, messages, config);
+        });
+
+        if (result) {
+          messages.push({ role: "assistant", content: result });
+          log.blank();
+          console.log(result);
+          log.blank();
+        } else {
+          log.error("Received an empty response from the model.");
+        }
+      }
+    } catch (err: any) {
+      log.blank();
+      log.block("Something went wrong", [palette.danger(err.message ?? String(err))], "danger");
+      log.blank();
+    }
+    
+    rl.prompt();
+  });
+
+  rl.on("close", () => {
+    log.blank();
+    log.info("Goodbye!");
+    process.exit(0);
+  });
+}
+
+startREPL().catch((err) => {
+  console.error(err);
+  process.exit(1);
 });

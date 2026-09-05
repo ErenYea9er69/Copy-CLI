@@ -5,15 +5,10 @@ import { checkHardRules } from "../rules/validator.js";
 import { renderViolationTable } from "../ui/table.js";
 import { log } from "../utils/logger.js";
 
-/**
- * Runs the hard rules against copy already in the codebase, no API call
- * involved. This is the command to wire into CI or a pre-commit hook: it
- * enforces the shared style guide without needing an API key or network
- * access, and it never rewrites anything on its own.
- */
-export async function checkCommand(paths: string[], opts: { config?: string; json?: boolean }) {
+export async function checkCommand(args: string[]) {
   const start = Date.now();
-  const config = await loadConfig(opts.config);
+  const config = await loadConfig();
+  const paths = args.length > 0 ? args : config.include;
   const files = await resolveFiles(paths, config);
   const candidates = await extractFiles(files, config);
 
@@ -25,21 +20,15 @@ export async function checkCommand(paths: string[], opts: { config?: string; jso
     }
   }
 
-  if (opts.json) {
-    console.log(JSON.stringify({ files: files.length, candidates: candidates.length, violations: rows }, null, 2));
-    process.exitCode = rows.length > 0 ? 1 : 0;
-    return;
-  }
-
   const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 
   log.header("check", `${candidates.length} string(s)`, `${files.length} file(s)`);
   log.blank();
+  
   if (rows.length === 0) {
     log.block("Passed", ["No style guide violations found."], "success");
     log.blank();
     log.status(`${elapsed}s`);
-    process.exitCode = 0;
     return;
   }
 
@@ -48,5 +37,4 @@ export async function checkCommand(paths: string[], opts: { config?: string; jso
   log.block("Failed", [`${rows.length} string(s) break the house style.`], "danger");
   log.blank();
   log.status(`${elapsed}s`);
-  process.exitCode = 1;
 }
