@@ -23,16 +23,12 @@
     "@babel/traverse": "^7.26.0",
     "@babel/types": "^7.26.0",
     "@inquirer/prompts": "^7.2.0",
-    "boxen": "^8.0.1",
     "chalk": "^5.4.0",
-    "cli-table3": "^0.6.5",
     "commander": "^12.1.0",
     "diff": "^7.0.0",
     "dotenv": "^16.4.7",
     "fast-glob": "^3.3.2",
-    "figlet": "^1.7.0",
     "figures": "^6.1.0",
-    "gradient-string": "^3.0.0",
     "magic-string": "^0.30.14",
     "nanoid": "^5.0.9",
     "ora": "^8.1.1",
@@ -41,8 +37,6 @@
   "devDependencies": {
     "@types/babel__traverse": "^7.20.6",
     "@types/diff": "^6.0.0",
-    "@types/figlet": "^1.7.0",
-    "@types/gradient-string": "^1.1.6",
     "@types/node": "^22.10.2",
     "typescript": "^5.7.2"
   }

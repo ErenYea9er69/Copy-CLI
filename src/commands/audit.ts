@@ -17,6 +17,7 @@ import { log } from "../utils/logger.js";
  * lands, and it is not a stand-in for an actual A/B test.
  */
 export async function auditCommand(paths: string[], opts: { config?: string; json?: boolean; threshold?: number }) {
+  const start = Date.now();
   const config = await loadConfig(opts.config);
   const files = await resolveFiles(paths, config);
   const candidates = await extractFiles(files, config);
@@ -36,7 +37,9 @@ export async function auditCommand(paths: string[], opts: { config?: string; jso
     return;
   }
 
-  log.title("Clarity audit", `${candidates.length} string(s) across ${files.length} file(s)`);
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+
+  log.header("audit", `${candidates.length} string(s)`, `${files.length} file(s)`);
   log.blank();
   if (rows.length === 0) {
     log.info("Nothing to score.");
@@ -49,7 +52,9 @@ export async function auditCommand(paths: string[], opts: { config?: string; jso
 
   const average = Math.round(rows.reduce((sum, r) => sum + r.score.score, 0) / rows.length);
   log.blank();
-  const tone = below.length === 0 ? "success" : average < threshold ? "danger" : "warn";
-  log.panel(`Average clarity score: ${average}/100`, [`${below.length} string(s) fall below the threshold of ${threshold}.`], tone);
+  const tone = below.length === 0 ? "success" as const : average < threshold ? "danger" as const : "warn" as const;
+  log.block(`Average clarity score: ${average}/100`, [`${below.length} string(s) fall below the threshold of ${threshold}.`], tone);
+  log.blank();
+  log.status(`${elapsed}s`, `threshold: ${threshold}`);
   process.exitCode = below.length > 0 ? 1 : 0;
 }

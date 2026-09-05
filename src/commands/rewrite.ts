@@ -1,4 +1,3 @@
-import ora from "ora";
 import { loadConfig } from "../config.js";
 import { resolveFiles } from "../utils/glob.js";
 import { extractFiles } from "../extract/extractor.js";
@@ -7,7 +6,8 @@ import { applyResults } from "../patch/applyPatch.js";
 import { writeReport } from "../cache/cache.js";
 import { reviewOne } from "../ui/prompts.js";
 import { log } from "../utils/logger.js";
-import { palette, progressBar } from "../ui/theme.js";
+import { palette, sym } from "../ui/theme.js";
+import { createSpinner, spinnerProgress } from "../ui/spinner.js";
 import type { RewriteResult } from "../extract/types.js";
 
 interface RewriteOpts {
@@ -35,16 +35,17 @@ export async function rewriteCommand(paths: string[], opts: RewriteOpts) {
     return;
   }
 
-  log.title("Rewrite", `${candidates.length} candidate string(s) across ${files.length} file(s)`);
+  log.header("rewrite", `${candidates.length} string(s)`, `${files.length} file(s)`, `model: ${config.model}`);
   log.blank();
 
-  const spinner = ora({ text: "Calling the model...", spinner: "dots", color: "magenta" }).start();
+  const spinner = createSpinner("Calling the model...");
+  spinner.start();
   const startedAt = Date.now();
   const results = await rewriteCandidates(candidates, config, (done, total, current) => {
-    const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
-    spinner.text = `${progressBar(done, total, 18)}  ${done}/${total}  ${palette.muted(`${current.file}:${current.line}`)}  ${palette.muted(`${elapsed}s`)}`;
+    spinner.text = spinnerProgress(done, total, `${current.file}:${current.line}`, startedAt);
   });
-  spinner.succeed(`Model finished in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
+  const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+  spinner.succeed(`Model finished  ${palette.muted(`${elapsed}s`)}`);
   log.blank();
 
   const ok = results.filter((r) => r.status === "ok").length;
@@ -53,18 +54,21 @@ export async function rewriteCommand(paths: string[], opts: RewriteOpts) {
   const failed = results.filter((r) => r.status === "failed").length;
 
   const summaryLines = [
-    `${palette.success("●")} ${ok} clean`,
-    `${palette.muted("●")} ${unchanged} unchanged`,
-    `${palette.danger("●")} ${needsReview} need review`,
-    `${palette.warn("●")} ${failed} failed to reach the model`,
+    `${palette.success(sym.dot)} ${ok} clean`,
+    `${palette.muted(sym.dot)} ${unchanged} unchanged`,
+    `${palette.danger(sym.dot)} ${needsReview} need review`,
+    `${palette.warn(sym.dot)} ${failed} failed`,
   ];
-  log.panel("Rewrite summary", summaryLines, needsReview > 0 || failed > 0 ? "warn" : "success");
+  const tone = needsReview > 0 || failed > 0 ? "warn" as const : "success" as const;
+  log.block("Summary", summaryLines, tone);
   log.blank();
 
   if (opts.dryRun) {
     const reportPath = await writeReport(results);
     log.ok(`Saved suggestions to ${reportPath} without touching any source file.`);
     log.dim("Run `copyshed apply` to review and apply them.");
+    log.blank();
+    log.status(`model: ${config.model}`, `${elapsed}s`, `${candidates.length} strings`);
     return;
   }
 
@@ -124,11 +128,13 @@ export async function rewriteCommand(paths: string[], opts: RewriteOpts) {
       if (s.changed > 0) log.ok(`Applied ${s.changed} change(s) to ${s.file}`);
     }
     log.blank();
-    log.panel("Done", [`${totalChanged} change(s) applied across ${summaries.filter((s) => s.changed > 0).length} file(s).`], "success");
+    log.block("Done", [`${totalChanged} change(s) applied across ${summaries.filter((s) => s.changed > 0).length} file(s).`], "success");
   } else {
     log.info("Nothing applied.");
   }
 
   const reportPath = await writeReport(results, decisions);
   log.dim(`Report saved to ${reportPath}`);
+  log.blank();
+  log.status(`model: ${config.model}`, `${elapsed}s`, `${candidates.length} strings`);
 }

@@ -6,6 +6,7 @@ import { log } from "../utils/logger.js";
 import { palette } from "../ui/theme.js";
 
 export async function scanCommand(paths: string[], opts: { config?: string; json?: boolean }) {
+  const start = Date.now();
   const config = await loadConfig(opts.config);
   const files = await resolveFiles(paths, config);
 
@@ -15,13 +16,14 @@ export async function scanCommand(paths: string[], opts: { config?: string; json
   }
 
   const candidates = await extractFiles(files, config);
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
 
   if (opts.json) {
     console.log(JSON.stringify({ files: files.length, candidates }, null, 2));
     return;
   }
 
-  log.title("Scan results", `${files.length} file(s) checked`);
+  log.header("scan", `${files.length} file(s)`, `${candidates.length} string(s)`);
   log.blank();
   if (candidates.length > 0) {
     console.log(renderCandidateTable(candidates));
@@ -30,4 +32,6 @@ export async function scanCommand(paths: string[], opts: { config?: string; json
   } else {
     log.ok("No candidate strings found.");
   }
+  log.blank();
+  log.status(`${elapsed}s`);
 }

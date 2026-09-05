@@ -12,7 +12,7 @@ import { applyCommand } from "./commands/apply.js";
 import { checkCommand } from "./commands/check.js";
 import { auditCommand } from "./commands/audit.js";
 import { log } from "./utils/logger.js";
-import { banner, palette } from "./ui/theme.js";
+import { banner, palette, sym } from "./ui/theme.js";
 
 function getVersion(): string {
   try {
@@ -37,13 +37,17 @@ const EXAMPLES = [
 ] as const;
 
 function examplesBlock(): string {
-  const lines = EXAMPLES.map(([cmd, desc]) => `  ${chalk.cyan(cmd.padEnd(34))}${chalk.dim(desc)}`);
-  return [chalk.bold("Examples:"), ...lines].join("\n");
+  const lines = EXAMPLES.map(
+    ([cmd, desc]) => `  ${palette.accent(cmd.padEnd(34))}${chalk.dim(desc)}`
+  );
+  return [chalk.bold.white("Examples:"), ...lines].join("\n");
 }
 
 program
   .name("copyshed")
-  .description("Find user-facing strings in your code and rewrite them to match your brand voice and a strict house style.")
+  .description(
+    "Find user-facing strings in your code and rewrite them to match your brand voice and a strict house style."
+  )
   .version(version, "-v, --version", "print the current version")
   .addHelpText("beforeAll", () => `\n${banner(version)}\n`)
   .addHelpText("afterAll", () => `\n${examplesBlock()}\n`)
@@ -92,7 +96,9 @@ program
 
 program
   .command("check")
-  .description("deterministic style guide gate: fails if banned words, em dashes, or markdown show up in existing copy. No API key needed, safe for CI.")
+  .description(
+    "deterministic style guide gate: fails if banned words, em dashes, or markdown show up in existing copy. No API key needed, safe for CI."
+  )
   .argument("[paths...]", "glob patterns to scan, defaults to the config's include list")
   .option("-c, --config <path>", "path to copyshed.config.json")
   .option("--json", "print machine-readable JSON instead of a table")
@@ -102,7 +108,9 @@ program
 
 program
   .command("audit")
-  .description("score existing copy for clarity and specificity (reading grade, passive voice, vague quantifiers). No API key needed, safe for CI.")
+  .description(
+    "score existing copy for clarity and specificity (reading grade, passive voice, vague quantifiers). No API key needed, safe for CI."
+  )
   .argument("[paths...]", "glob patterns to scan, defaults to the config's include list")
   .option("-c, --config <path>", "path to copyshed.config.json")
   .option("--json", "print machine-readable JSON instead of a table")
@@ -118,6 +126,6 @@ if (process.argv.length <= 2) {
 
 program.parseAsync(process.argv).catch((err) => {
   log.blank();
-  log.panel("Something went wrong", [palette.danger(err?.message ?? String(err))], "danger");
+  log.block("Something went wrong", [palette.danger(err?.message ?? String(err))], "danger");
   process.exitCode = 1;
 });

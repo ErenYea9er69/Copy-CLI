@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { palette, sym, sectionTitle, rule, panel } from "../ui/theme.js";
+import { palette, sym, header, rule, block, statusLine } from "../ui/theme.js";
 
 export const log = {
   info: (msg: string) => console.log(`${palette.info(sym.info)} ${msg}`),
@@ -12,14 +12,26 @@ export const log = {
   /** Bold section heading kept for backward compatibility with plain output. */
   heading: (msg: string) => console.log(chalk.bold.white(msg)),
 
-  /** Preferred section heading: colored marker + title + optional dim subtitle. */
-  title: (title: string, subtitle?: string) => console.log(sectionTitle(title, subtitle)),
+  /** Compact command header: `◆ copyshed <command>  ·  context segments` */
+  header: (command: string, ...segments: string[]) => console.log(header(command, ...segments)),
 
   rule: () => console.log(rule()),
-
   blank: () => console.log(""),
 
-  /** Boxed, color-coded summary panel for end-of-command results. */
+  /** Indented content block with colored left bar (replaces boxen panels). */
+  block: (title: string, lines: string[], tone: "neutral" | "success" | "warn" | "danger" | "accent" = "neutral") =>
+    console.log(block(title, lines, tone)),
+
+  /** Bottom-of-command metadata line — model, timing, counts. */
+  status: (...segments: string[]) => console.log(statusLine(...segments)),
+
+  // Legacy alias: `log.panel()` maps to `log.block()` for compatibility
   panel: (title: string, lines: string[], tone: "neutral" | "success" | "warn" | "danger" | "accent" = "neutral") =>
-    console.log(panel(title, lines, tone)),
+    console.log(block(title, lines, tone)),
+
+  // Legacy alias for `log.header()`
+  title: (title: string, subtitle?: string) => {
+    const segments = subtitle ? [subtitle] : [];
+    console.log(header(title, ...segments));
+  },
 };

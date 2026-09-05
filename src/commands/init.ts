@@ -6,7 +6,7 @@ import { log } from "../utils/logger.js";
 import { palette } from "../ui/theme.js";
 
 export async function initCommand(opts: { yes?: boolean }) {
-  log.title("Setup", "a few questions, then you're ready to scan");
+  log.header("init");
   log.blank();
 
   const configPath = path.resolve(process.cwd(), CONFIG_FILENAME);
@@ -54,8 +54,8 @@ export async function initCommand(opts: { yes?: boolean }) {
   }
 
   log.blank();
-  log.panel("You're set up", [
-    `1. Put your Anthropic API key in ${palette.accent(".env")}`,
+  log.block("Next steps", [
+    `1. Put your API key in ${palette.accent(".env")}`,
     `2. Run ${palette.accent("copyshed scan")} to see what it finds`,
     `3. Run ${palette.accent("copyshed rewrite")} to generate suggestions`,
   ], "accent");

@@ -12,6 +12,7 @@ import { log } from "../utils/logger.js";
  * access, and it never rewrites anything on its own.
  */
 export async function checkCommand(paths: string[], opts: { config?: string; json?: boolean }) {
+  const start = Date.now();
   const config = await loadConfig(opts.config);
   const files = await resolveFiles(paths, config);
   const candidates = await extractFiles(files, config);
@@ -30,16 +31,22 @@ export async function checkCommand(paths: string[], opts: { config?: string; jso
     return;
   }
 
-  log.title("Style guide check", `${candidates.length} string(s) across ${files.length} file(s)`);
+  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+
+  log.header("check", `${candidates.length} string(s)`, `${files.length} file(s)`);
   log.blank();
   if (rows.length === 0) {
-    log.panel("Passed", ["No style guide violations found."], "success");
+    log.block("Passed", ["No style guide violations found."], "success");
+    log.blank();
+    log.status(`${elapsed}s`);
     process.exitCode = 0;
     return;
   }
 
   console.log(renderViolationTable(rows));
   log.blank();
-  log.panel("Failed", [`${rows.length} string(s) break the house style.`], "danger");
+  log.block("Failed", [`${rows.length} string(s) break the house style.`], "danger");
+  log.blank();
+  log.status(`${elapsed}s`);
   process.exitCode = 1;
 }
