@@ -3,8 +3,12 @@ import path from "node:path";
 import { input, confirm } from "@inquirer/prompts";
 import { CONFIG_FILENAME, defaultConfig } from "../config.js";
 import { log } from "../utils/logger.js";
+import { palette } from "../ui/theme.js";
 
 export async function initCommand(opts: { yes?: boolean }) {
+  log.title("Setup", "a few questions, then you're ready to scan");
+  log.blank();
+
   const configPath = path.resolve(process.cwd(), CONFIG_FILENAME);
 
   const exists = await fs
@@ -49,9 +53,10 @@ export async function initCommand(opts: { yes?: boolean }) {
     log.ok("Wrote .env (add your Anthropic API key, then keep this file out of version control)");
   }
 
-  log.info("");
-  log.info("Next steps:");
-  log.info("  1. Put your Anthropic API key in .env");
-  log.info("  2. Run: copyshed scan");
-  log.info("  3. Run: copyshed rewrite");
+  log.blank();
+  log.panel("You're set up", [
+    `1. Put your Anthropic API key in ${palette.accent(".env")}`,
+    `2. Run ${palette.accent("copyshed scan")} to see what it finds`,
+    `3. Run ${palette.accent("copyshed rewrite")} to generate suggestions`,
+  ], "accent");
 }

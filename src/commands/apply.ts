@@ -19,6 +19,9 @@ export async function applyCommand(opts: ApplyOpts) {
   const report = await readReport(opts.report);
   const pending = report.results.filter((r) => r.status !== "failed" && matchesPaths(r.candidate.file, opts.paths));
 
+  log.title("Apply", `${pending.length} pending suggestion(s) from saved report`);
+  log.blank();
+
   if (pending.length === 0) {
     log.info("Nothing to apply from that report.");
     return;
@@ -45,13 +48,17 @@ export async function applyCommand(opts: ApplyOpts) {
     }
   }
 
+  log.blank();
   if (toApply.length === 0) {
     log.info("Nothing applied.");
     return;
   }
 
   const summaries = await applyResults(toApply);
+  const totalChanged = summaries.reduce((sum, s) => sum + s.changed, 0);
   for (const s of summaries) {
     if (s.changed > 0) log.ok(`Applied ${s.changed} change(s) to ${s.file}`);
   }
+  log.blank();
+  log.panel("Done", [`${totalChanged} change(s) applied across ${summaries.filter((s) => s.changed > 0).length} file(s).`], "success");
 }

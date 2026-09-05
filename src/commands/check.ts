@@ -30,14 +30,16 @@ export async function checkCommand(paths: string[], opts: { config?: string; jso
     return;
   }
 
-  log.heading(`Checked ${candidates.length} string(s) across ${files.length} file(s)`);
+  log.title("Style guide check", `${candidates.length} string(s) across ${files.length} file(s)`);
+  log.blank();
   if (rows.length === 0) {
-    log.ok("No style guide violations found.");
+    log.panel("Passed", ["No style guide violations found."], "success");
     process.exitCode = 0;
     return;
   }
 
   console.log(renderViolationTable(rows));
-  log.error(`${rows.length} string(s) break the house style.`);
+  log.blank();
+  log.panel("Failed", [`${rows.length} string(s) break the house style.`], "danger");
   process.exitCode = 1;
 }

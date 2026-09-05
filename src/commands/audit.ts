@@ -36,7 +36,8 @@ export async function auditCommand(paths: string[], opts: { config?: string; jso
     return;
   }
 
-  log.heading(`Scored ${candidates.length} string(s) across ${files.length} file(s)`);
+  log.title("Clarity audit", `${candidates.length} string(s) across ${files.length} file(s)`);
+  log.blank();
   if (rows.length === 0) {
     log.info("Nothing to score.");
     return;
@@ -47,6 +48,8 @@ export async function auditCommand(paths: string[], opts: { config?: string; jso
   if (rows.length > 40) log.dim(`...and ${rows.length - 40} more string(s), showing the lowest-scoring 40.`);
 
   const average = Math.round(rows.reduce((sum, r) => sum + r.score.score, 0) / rows.length);
-  log.info(`Average clarity score: ${average}/100. ${below.length} string(s) fall below ${threshold}.`);
+  log.blank();
+  const tone = below.length === 0 ? "success" : average < threshold ? "danger" : "warn";
+  log.panel(`Average clarity score: ${average}/100`, [`${below.length} string(s) fall below the threshold of ${threshold}.`], tone);
   process.exitCode = below.length > 0 ? 1 : 0;
 }

@@ -3,6 +3,7 @@ import { resolveFiles } from "../utils/glob.js";
 import { extractFiles } from "../extract/extractor.js";
 import { renderCandidateTable } from "../ui/table.js";
 import { log } from "../utils/logger.js";
+import { palette } from "../ui/theme.js";
 
 export async function scanCommand(paths: string[], opts: { config?: string; json?: boolean }) {
   const config = await loadConfig(opts.config);
@@ -20,8 +21,13 @@ export async function scanCommand(paths: string[], opts: { config?: string; json
     return;
   }
 
-  log.heading(`Scanned ${files.length} file(s), found ${candidates.length} candidate string(s)`);
+  log.title("Scan results", `${files.length} file(s) checked`);
+  log.blank();
   if (candidates.length > 0) {
     console.log(renderCandidateTable(candidates));
+    log.blank();
+    log.info(`${candidates.length} candidate string(s) found. Run ${palette.accent("copyshed rewrite")} to generate suggestions.`);
+  } else {
+    log.ok("No candidate strings found.");
   }
 }

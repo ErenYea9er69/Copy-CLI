@@ -1,29 +1,44 @@
 import { select, input, confirm } from "@inquirer/prompts";
 import chalk from "chalk";
-import { renderInlineDiff } from "./diff.js";
+import { renderReviewDiff } from "./diff.js";
+import { palette, sym, progressBar } from "./theme.js";
 import type { RewriteResult } from "../extract/types.js";
 
 export type ReviewChoice = "accept" | "edit" | "skip" | "accept-all-clean" | "quit";
 
+const STATUS_BADGE: Record<RewriteResult["status"], string> = {
+  ok: palette.success(`${sym.tick} clean`),
+  needs_review: palette.danger(`${sym.cross} needs review`),
+  unchanged: chalk.dim(`${sym.line} unchanged`),
+  failed: palette.warn(`${sym.warn} failed`),
+};
+
 export async function reviewOne(result: RewriteResult, index: number, total: number): Promise<{ choice: ReviewChoice; edited?: string }> {
   const { candidate } = result;
   console.log("");
-  const roleTag = result.role ? chalk.dim(` [${result.role}]`) : "";
-  console.log(chalk.dim(`[${index + 1}/${total}] ${candidate.file}:${candidate.line} (${candidate.source}${candidate.contextName ? " " + candidate.contextName : ""})`) + roleTag);
-  console.log(renderInlineDiff(candidate.value, result.rewrite));
-  if (result.rationale) console.log(chalk.dim(`  ${result.rationale}`));
+  console.log(chalk.dim("─".repeat(Math.min(process.stdout.columns || 80, 72))));
+
+  const roleTag = result.role ? palette.accent(` [${result.role}]`) : "";
+  const location = chalk.dim(`${candidate.file}:${candidate.line}`);
+  const sourceTag = chalk.dim(`(${candidate.source}${candidate.contextName ? " " + candidate.contextName : ""})`);
+  console.log(`${progressBar(index + 1, total, 12)}  ${chalk.dim(`${index + 1}/${total}`)}  ${location} ${sourceTag}${roleTag}`);
+  console.log(`  ${STATUS_BADGE[result.status]}`);
+  console.log("");
+  console.log(renderReviewDiff(candidate.value, result.rewrite));
+
+  if (result.rationale) console.log(chalk.dim(`  ${sym.info} ${result.rationale}`));
   if (result.scoreBefore != null && result.scoreAfter != null) {
     const delta = result.scoreAfter - result.scoreBefore;
-    const deltaText = delta > 0 ? chalk.green(`+${delta}`) : delta < 0 ? chalk.red(`${delta}`) : chalk.dim("+0");
+    const deltaText = delta > 0 ? palette.success(`+${delta}`) : delta < 0 ? palette.danger(`${delta}`) : chalk.dim("+0");
     console.log(chalk.dim(`  clarity score: ${result.scoreBefore} -> ${result.scoreAfter} (${deltaText})`));
   }
 
   if (result.status === "needs_review") {
-    console.log(chalk.red(`  needs review after ${result.attempts} attempt(s):`));
-    for (const e of result.errors) console.log(chalk.red(`    - ${e.rule}: ${e.detail}`));
+    console.log(palette.danger(`  needs review after ${result.attempts} attempt(s):`));
+    for (const e of result.errors) console.log(palette.danger(`    ${sym.bullet} ${e.rule}: ${e.detail}`));
   }
   for (const w of result.warnings) {
-    console.log(chalk.yellow(`  warning: ${w.rule}: ${w.detail}`));
+    console.log(palette.warn(`  ${sym.warn} ${w.rule}: ${w.detail}`));
   }
 
   if (result.status === "unchanged") {
@@ -32,11 +47,11 @@ export async function reviewOne(result: RewriteResult, index: number, total: num
   }
 
   const choices = [
-    { name: "Accept", value: "accept" as const },
-    { name: "Edit", value: "edit" as const },
-    { name: "Skip", value: "skip" as const },
-    { name: "Accept all remaining clean suggestions", value: "accept-all-clean" as const },
-    { name: "Quit and save progress", value: "quit" as const },
+    { name: `${sym.tick} Accept`, value: "accept" as const },
+    { name: `${sym.pointer} Edit`, value: "edit" as const },
+    { name: `${sym.line} Skip`, value: "skip" as const },
+    { name: `${sym.arrowRight} Accept all remaining clean suggestions`, value: "accept-all-clean" as const },
+    { name: `${sym.cross} Quit and save progress`, value: "quit" as const },
   ];
   if (result.status === "needs_review") {
     choices.shift(); // remove plain "Accept" for anything that failed validation

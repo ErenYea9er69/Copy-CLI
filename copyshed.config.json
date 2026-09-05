@@ -1,0 +1,100 @@
+{
+  "target_audience": "batata",
+  "brand_voice": "batata",
+  "goals": "batata",
+  "extra_banned_words": [],
+  "extra_banned_phrases": [],
+  "include": [
+    "src/**/*.{js,jsx,ts,tsx}",
+    "**/locales/**/*.json",
+    "**/i18n/**/*.json"
+  ],
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/.git/**",
+    "**/*.test.*",
+    "**/*.spec.*",
+    "**/*.d.ts"
+  ],
+  "attribute_allowlist": [
+    "title",
+    "label",
+    "placeholder",
+    "alt",
+    "aria-label",
+    "aria-description",
+    "description",
+    "tooltip",
+    "helperText",
+    "errorText",
+    "buttonText"
+  ],
+  "key_allowlist": [
+    "title",
+    "label",
+    "placeholder",
+    "description",
+    "message",
+    "heading",
+    "subtitle",
+    "tooltip",
+    "error",
+    "success",
+    "warning",
+    "cta",
+    "header",
+    "footer",
+    "body",
+    "text",
+    "copy"
+  ],
+  "call_allowlist": [
+    "t",
+    "i18n.t",
+    "formatMessage",
+    "translate"
+  ],
+  "model": "claude-sonnet-5",
+  "max_retries": 2,
+  "temperature": 0.4,
+  "cta_keys": [
+    "cta",
+    "buttontext",
+    "button",
+    "submit",
+    "action",
+    "confirm"
+  ],
+  "error_keys": [
+    "error",
+    "errortext",
+    "warning"
+  ],
+  "success_keys": [
+    "success"
+  ],
+  "headline_keys": [
+    "title",
+    "heading",
+    "header",
+    "subtitle",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6"
+  ],
+  "label_keys": [
+    "label",
+    "placeholder",
+    "tooltip",
+    "helpertext",
+    "alt",
+    "aria-label",
+    "aria-description"
+  ],
+  "reading_level_target": 8
+}

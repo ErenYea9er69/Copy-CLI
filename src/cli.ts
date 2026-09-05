@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 import "dotenv/config";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+import chalk from "chalk";
 import { Command } from "commander";
 import { initCommand } from "./commands/init.js";
 import { scanCommand } from "./commands/scan.js";
@@ -8,13 +12,42 @@ import { applyCommand } from "./commands/apply.js";
 import { checkCommand } from "./commands/check.js";
 import { auditCommand } from "./commands/audit.js";
 import { log } from "./utils/logger.js";
+import { banner, palette } from "./ui/theme.js";
 
+function getVersion(): string {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const pkgPath = path.resolve(here, "..", "package.json");
+    return JSON.parse(readFileSync(pkgPath, "utf8")).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+const version = getVersion();
 const program = new Command();
+
+const EXAMPLES = [
+  ["copyshed init", "create copyshed.config.json in this project"],
+  ["copyshed scan src/", "list user-facing strings, no API call"],
+  ["copyshed check", "CI gate: fail on banned words / em dashes"],
+  ["copyshed audit --threshold 70", "score existing copy for clarity"],
+  ["copyshed rewrite src/ -y", "rewrite copy, auto-accept clean results"],
+  ["copyshed apply", "review a saved dry-run report and apply it"],
+] as const;
+
+function examplesBlock(): string {
+  const lines = EXAMPLES.map(([cmd, desc]) => `  ${chalk.cyan(cmd.padEnd(34))}${chalk.dim(desc)}`);
+  return [chalk.bold("Examples:"), ...lines].join("\n");
+}
 
 program
   .name("copyshed")
   .description("Find user-facing strings in your code and rewrite them to match your brand voice and a strict house style.")
-  .version("0.1.0");
+  .version(version, "-v, --version", "print the current version")
+  .addHelpText("beforeAll", () => `\n${banner(version)}\n`)
+  .addHelpText("afterAll", () => `\n${examplesBlock()}\n`)
+  .showHelpAfterError(chalk.dim("(run with --help for usage)"));
 
 program
   .command("init")
@@ -78,7 +111,13 @@ program
     await auditCommand(paths, opts);
   });
 
+if (process.argv.length <= 2) {
+  program.outputHelp();
+  process.exit(0);
+}
+
 program.parseAsync(process.argv).catch((err) => {
-  log.error(err?.message ?? String(err));
+  log.blank();
+  log.panel("Something went wrong", [palette.danger(err?.message ?? String(err))], "danger");
   process.exitCode = 1;
 });
