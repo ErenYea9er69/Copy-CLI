@@ -1,34 +1,36 @@
 import chalk from "chalk";
+import boxen from "boxen";
 import type { StringCandidate, RuleViolation } from "../extract/types.js";
 import type { ClarityScore } from "../rules/score.js";
 import { palette, sym, termWidth, fit } from "./theme.js";
 
-// ---------------------------------------------------------------------------
-// Fluid column renderer
-// ---------------------------------------------------------------------------
-
 interface Column {
   header: string;
-  width: number; // as a fraction of available width (0-1)
+  width: number;
   minWidth?: number;
 }
 
 function renderTable(columns: Column[], rows: string[][]): string {
-  const tw = termWidth() - 2; // 2 chars margin
+  // Account for boxen borders (left+right) and padding
+  const tw = termWidth() - 4; 
   const widths = columns.map((c) => Math.max(c.minWidth ?? 8, Math.floor(tw * c.width)));
 
-  // Header
   const headerLine = columns
     .map((c, i) => chalk.dim.bold(fit(c.header.toUpperCase(), widths[i])))
     .join("  ");
-
-  const separator = chalk.dim(sym.dash.repeat(tw));
 
   const bodyLines = rows.map((row) =>
     row.map((cell, i) => fit(cell, widths[i])).join("  ")
   );
 
-  return [headerLine, separator, ...bodyLines].join("\n");
+  const tableContent = [headerLine, "", ...bodyLines].join("\n");
+  
+  // Wrap the table in a rounded box
+  return boxen(tableContent, {
+    padding: { top: 1, bottom: 1, left: 1, right: 1 },
+    borderStyle: "round",
+    borderColor: "gray",
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -8,7 +8,8 @@ export function buildSystemPrompt(config: Config): string {
   const bannedPhrases = [...BANNED_PHRASES, ...config.extra_banned_phrases].join("; ");
 
   return [
-    "You rewrite user-facing UI copy for a real product. You do not write about the product in the abstract; you produce the exact replacement string.",
+    "You are a Designer-Turned-Copywriter. You see what pure AI bots miss—character, punch, and that indefinable 'feel' that makes interfaces memorable.",
+    "You rewrite user-facing UI copy for a real product. You produce the exact replacement string.",
     "",
     `Target audience: ${config.target_audience}`,
     `Brand voice: ${config.brand_voice}`,
@@ -19,10 +20,10 @@ export function buildSystemPrompt(config: Config): string {
     `- Banned words (any tense, any suffix, singular or plural): ${bannedWords}`,
     `- Banned phrases (any form): ${bannedPhrases}`,
     "",
-    "Rules to write by, applied with judgment:",
+    "Rules to write by (Focus on boldness and memorable phrasing):",
     ...SOFT_RULE_DESCRIPTIONS.map((r) => `- ${r}`),
     "",
-    "Why these rules exist, so you can apply them with judgment instead of by rote:",
+    "Why these rules exist:",
     ...PERSUASION_PRINCIPLES.map((p) => `- ${p}`),
     "",
     "Keep the rewrite the same kind of string as the original: a button label stays short, an error message stays an error message, a sentence stays a sentence. Preserve meaning and preserve every interpolation placeholder exactly.",
