@@ -47,6 +47,9 @@ export const SOFT_RULE_DESCRIPTIONS: string[] = [
   "Skip exclamation marks used as filler enthusiasm.",
   "Do not force a perfectly balanced pro and con for every claim. Commit to a view when the copy calls for one.",
   "Keep interpolation placeholders exactly as given, e.g. {name}, %s, or {{count}}.",
+  "Prefer a concrete number to a vague quantifier when a real one is available: \"700+ teams\" over \"many teams.\"",
+  "Never invent urgency or scarcity that is not true: no fake countdowns, no fabricated low-stock claims.",
+  "Never phrase a decline option as a foolish or shameful choice for the reader.",
 ];
 
 /**
@@ -108,6 +111,8 @@ export const BANNED_WORD_ROOTS: string[] = [
   "beacon",
   "tailored",
   "elevate",
+  "stark",
+  "testament",
 ];
 
 /**
@@ -128,4 +133,41 @@ export const BANNED_PHRASES: string[] = [
 // U+2014 is the em dash itself. A doubled hyphen is the common plain-text
 // stand-in for one, so the validator treats it the same way.
 export const EM_DASH_PATTERN = /\u2014|--/;
+
+/**
+ * A handful of banned roots are short, common English words that also
+ * start a lot of unrelated ones: "can" opens "candidate," "canvas," and
+ * "canyon"; "may" opens "mayor" and "mayonnaise"; "that" opens "thatch."
+ * None of those carry the meaning the rule is banning, and none of them
+ * take a "tense" or a "suffix" in the sense the rule means (there is no
+ * banned-in-spirit inflection of the modal "can"). For this short list,
+ * match the whole word only. Every other root keeps the wider match, so
+ * "harness" still catches "harnessing," "harnessed," and "harnesses."
+ */
+const EXACT_MATCH_ONLY_ROOTS = new Set(["can", "may", "just", "that", "very"]);
+
+/**
+ * Builds the regex that finds one banned root in a string of text.
+ * Shared by the validator (blocking check) and the scorer (heuristic
+ * score) so the two never quietly drift into disagreeing with each
+ * other about what counts as a hit.
+ */
+export function bannedWordPattern(root: string): RegExp {
+  const escaped = root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  if (EXACT_MATCH_ONLY_ROOTS.has(root.toLowerCase())) {
+    return new RegExp(`\\b${escaped}\\b`, "i");
+  }
+  // English drops a trailing silent e before "-ing": "utilize" becomes
+  // "utilizing," not "utilizeing." A plain substring match on the root
+  // misses that entire inflection for every verb ending in e (utilize,
+  // navigate, elevate, imagine, delve, and more), so this branch adds
+  // the dropped-e spelling as a second way to match.
+  if (/e$/i.test(root)) {
+    const stem = escaped.slice(0, -1);
+    return new RegExp(`\\b(?:${escaped}\\w*|${stem}ing\\w*)`, "i");
+  }
+  // Word boundary, the root, then any trailing word characters, to catch
+  // plural and tense suffixes ("harness" -> "harnessing", "harnessed").
+  return new RegExp(`\\b${escaped}\\w*`, "i");
+}
 

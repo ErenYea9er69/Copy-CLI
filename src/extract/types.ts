@@ -33,4 +33,10 @@ export interface RewriteResult {
   status: "ok" | "needs_review" | "unchanged" | "failed";
   errors: RuleViolation[];
   warnings: RuleViolation[];
+  /** Inferred psychological role (cta, error, headline, ...); see rules/psychology.ts. */
+  role?: string;
+  /** Heuristic 0-100 clarity score of the original string, for comparison. */
+  scoreBefore?: number;
+  /** Heuristic 0-100 clarity score of the rewrite. */
+  scoreAfter?: number;
 }

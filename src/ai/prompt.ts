@@ -1,4 +1,5 @@
 import { HARD_RULE_DESCRIPTIONS, SOFT_RULE_DESCRIPTIONS, BANNED_WORD_ROOTS, BANNED_PHRASES } from "../rules/writingRules.js";
+import { PERSUASION_PRINCIPLES, roleGuidance, type CopyRole } from "../rules/psychology.js";
 import type { Config } from "../config.js";
 import type { StringCandidate } from "../extract/types.js";
 
@@ -21,6 +22,9 @@ export function buildSystemPrompt(config: Config): string {
     "Rules to write by, applied with judgment:",
     ...SOFT_RULE_DESCRIPTIONS.map((r) => `- ${r}`),
     "",
+    "Why these rules exist, so you can apply them with judgment instead of by rote:",
+    ...PERSUASION_PRINCIPLES.map((p) => `- ${p}`),
+    "",
     "Keep the rewrite the same kind of string as the original: a button label stays short, an error message stays an error message, a sentence stays a sentence. Preserve meaning and preserve every interpolation placeholder exactly.",
     "",
     "Respond with a single JSON object and nothing else. No markdown fences, no commentary outside the JSON. Shape:",
@@ -28,12 +32,13 @@ export function buildSystemPrompt(config: Config): string {
   ].join("\n");
 }
 
-export function buildUserMessage(candidate: StringCandidate, priorFeedback?: string): string {
+export function buildUserMessage(candidate: StringCandidate, role: CopyRole, priorFeedback?: string): string {
   const lines = [
     `Original string: ${JSON.stringify(candidate.value)}`,
     `Found as: ${candidate.source}${candidate.contextName ? ` (${candidate.contextName})` : ""}`,
     `File: ${candidate.file}:${candidate.line}`,
     `Surrounding code: ${candidate.contextSnippet}`,
+    `Copy role: ${role}. ${roleGuidance(role)}`,
   ];
   if (priorFeedback) {
     lines.push(

@@ -62,6 +62,27 @@ export const ConfigSchema = z.object({
   model: z.string().default("claude-sonnet-5"),
   max_retries: z.number().int().min(0).max(5).default(2),
   temperature: z.number().min(0).max(1).default(0.4),
+
+  // Context detection: which keys/attributes mark a string as playing a
+  // specific psychological role in the interface. A key that matches none
+  // of these falls back to the "body" role. See src/rules/psychology.ts
+  // for what each role changes about the model's instructions.
+  cta_keys: z
+    .array(z.string())
+    .default(["cta", "buttontext", "button", "submit", "action", "confirm"]),
+  error_keys: z.array(z.string()).default(["error", "errortext", "warning"]),
+  success_keys: z.array(z.string()).default(["success"]),
+  headline_keys: z
+    .array(z.string())
+    .default(["title", "heading", "header", "subtitle", "h1", "h2", "h3", "h4", "h5", "h6"]),
+  label_keys: z
+    .array(z.string())
+    .default(["label", "placeholder", "tooltip", "helpertext", "alt", "aria-label", "aria-description"]),
+
+  // Target reading grade for body copy (Flesch-Kincaid). Consumer-facing
+  // writing advice generally lands between 6th and 9th grade; this is a
+  // heuristic ceiling for a warning, not a hard gate.
+  reading_level_target: z.number().min(1).max(18).default(8),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

@@ -106,7 +106,17 @@ export function extractFromSource(source: string, filePath: string, config: Conf
       const trailing = raw.length - raw.trimEnd().length;
       const start = (path.node.start ?? 0) + leading;
       const end = (path.node.end ?? 0) - trailing;
-      push(raw.trim(), start, end, "jsx-text");
+      // The enclosing tag name is the closest thing this candidate has to
+      // a "key": a <button> or <h1> tells the role-inference step what
+      // job the text is doing even though JSX text carries no attribute
+      // name of its own.
+      const enclosingElement = path.findParent((p) => p.isJSXElement());
+      let tagName: string | undefined;
+      if (enclosingElement?.isJSXElement()) {
+        const opening = enclosingElement.node.openingElement.name;
+        if (t.isJSXIdentifier(opening)) tagName = opening.name;
+      }
+      push(raw.trim(), start, end, "jsx-text", tagName);
     },
     JSXAttribute(path: NodePath<t.JSXAttribute>) {
       const name = t.isJSXIdentifier(path.node.name) ? path.node.name.name : "";

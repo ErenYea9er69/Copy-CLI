@@ -1,6 +1,8 @@
 import { getClient } from "./client.js";
 import { buildSystemPrompt, buildUserMessage } from "./prompt.js";
 import { validateRewrite } from "../rules/validator.js";
+import { inferRole } from "../rules/psychology.js";
+import { clarityScore } from "../rules/score.js";
 import type { Config } from "../config.js";
 import type { StringCandidate, RewriteResult, RuleViolation } from "../extract/types.js";
 
@@ -28,6 +30,8 @@ function formatFeedback(violations: RuleViolation[]): string {
 export async function rewriteCandidate(candidate: StringCandidate, config: Config): Promise<RewriteResult> {
   const client = getClient(config);
   const system = buildSystemPrompt(config);
+  const role = inferRole(candidate, config);
+  const scoreBefore = clarityScore(candidate.value, config.reading_level_target).score;
 
   let feedback: string | undefined;
   let attempts = 0;
@@ -40,7 +44,7 @@ export async function rewriteCandidate(candidate: StringCandidate, config: Confi
 
   while (attempts < maxAttempts) {
     attempts += 1;
-    const userMessage = buildUserMessage(candidate, feedback);
+    const userMessage = buildUserMessage(candidate, role, feedback);
 
     const text = await client.generateText(system, userMessage, config);
     const parsed = text ? parseModelJson(text) : null;
@@ -58,7 +62,8 @@ export async function rewriteCandidate(candidate: StringCandidate, config: Confi
       candidate.value,
       parsed.rewrite,
       config.extra_banned_words,
-      config.extra_banned_phrases
+      config.extra_banned_phrases,
+      role
     );
     lastErrors = errors;
     lastWarnings = warnings;
@@ -72,6 +77,9 @@ export async function rewriteCandidate(candidate: StringCandidate, config: Confi
         status: parsed.rewrite.trim() === candidate.value.trim() ? "unchanged" : "ok",
         errors: [],
         warnings,
+        role,
+        scoreBefore,
+        scoreAfter: clarityScore(parsed.rewrite, config.reading_level_target).score,
       };
     }
 
@@ -86,6 +94,9 @@ export async function rewriteCandidate(candidate: StringCandidate, config: Confi
     status: "needs_review",
     errors: lastErrors,
     warnings: lastWarnings,
+    role,
+    scoreBefore,
+    scoreAfter: lastRewrite ? clarityScore(lastRewrite, config.reading_level_target).score : undefined,
   };
 }
 

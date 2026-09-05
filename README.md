@@ -1,203 +1,67 @@
-# CopyShed
+copyshed
 
-CopyShed finds user-facing strings in your code and rewrites them to match
-your target audience, your brand voice, and a strict house writing style.
-It runs in the terminal. There is no server and no editor plugin; the CLI
-is the whole product.
+A style guide checks grammar. copyshed checks whether the reader acts.
 
-## How it works
+Most style tools stop at one question: does this string follow the rules. copyshed asks two questions. Does it follow the rules, and does it do the job it exists to do. A button and an error message both pass a grammar check, yet each fails the reader in a different way. copyshed treats this difference as the point, not a footnote.
 
-The tool has two halves, and they do different jobs on purpose.
+What it does
 
-Extraction and rule enforcement are deterministic. CopyShed parses your
-JS, JSX, TS, TSX, and JSON locale files with Babel, finds strings sitting
-in places that usually hold UI copy (JSX text, attributes like `label` or
-`placeholder`, object keys like `title` or `message`, i18n calls like
-`t(...)`), and checks them against a fixed rule set with plain string and
-regex matching. That check has no ambiguity: a banned word is either
-present or it is not.
+copyshed scans your code for user-facing strings: JSX text, JSX attributes, object keys, JSON locale files. It sends each string to a model along with your brand voice, your audience, and a fixed house style. It checks the result against hard rules a script verifies with certainty, and soft rules a human still has to judge. It shows you a diff. You accept, edit, or skip. Nothing touches disk until you say so.
 
-Rewriting is not deterministic, because turning "Unlock your dashboard's
-full potential" into something plain and specific requires actual
-language understanding, not pattern matching. CopyShed sends each
-candidate string to Claude with your brand voice, audience, and the full
-rule set as instructions. The model's answer then goes back through the
-same deterministic checker. If it breaks a hard rule, CopyShed sends the
-specific violation back to the model and asks again, up to a retry limit
-you control. A string that still fails after retries is marked "needs
-review" instead of applied silently. You always see a diff before
-anything touches disk, and nothing is written unless you accept it or
-pass `--yes`.
+Two commands run without an API key: check and audit. Wire either into CI. check fails the build on a banned word, an em dash, a markdown artifact. audit scores your existing copy for reading grade, passive voice, and vague quantifiers, and hands back a table sorted from worst to best.
 
-### Hard rules vs. soft rules
+The floor: hard rules
 
-Some of the writing rules you gave are things a script can verify with
-certainty: no em dash, no markdown, no banned word or phrase, at most one
-semicolon. CopyShed calls these hard rules. It blocks a suggestion that
-fails one.
+A banned word is present or it is not. An em dash is present or it is not. copyshed blocks a rewrite failing a hard rule and sends the model back with the exact violation, up to your configured retry count. No exceptions. No project override weakens this list. One shared floor, enforced the same way for every contributor.
 
-Other rules describe good prose but resist mechanical verification:
-active voice, sentence rhythm, committing to a view instead of hedging.
-CopyShed still puts these in the model's instructions, and it runs a few
-light heuristics that surface a warning (an exclamation mark, a phrase
-that reads like passive voice, a "not X, but Y" construction). Those are
-warnings for a human to glance at, not blocks. Say a check is a heuristic
-and not a guarantee; a tool that claims otherwise is lying to you.
+The judgment: soft rules
 
-## Setup
+Active voice over passive. Short sentences next to longer ones, on purpose. Plain words over their fancier synonyms. A side taken instead of a hedge. No script checks these with full certainty, so copyshed puts them in the model's instructions and runs light heuristics, surfacing a warning when one fires. A warning asks a human to look. It never blocks a rewrite on its own.
 
-Requires Node 18.17 or newer.
+The part most tools skip: what the string is for
 
-```
-cd copyshed
-npm install
-npm run build
-```
+Here is the gap in almost every style tool on the market. It treats a call-to-action button, an error message, and a headline as the same kind of writing. They are not.
 
-Link it so `copyshed` works as a command anywhere:
+A reader hits a button when motivation, ability, and a clear prompt land in the same moment. This is BJ Fogg's behavior model, built at Stanford's Behavior Design Lab: B equals motivation times ability times prompt. Copy supplies the prompt. Copy lowers the ability bar with fewer words and a plainer verb. Copy does not manufacture motivation out of nothing, and a tool faking it ends up faking urgency instead.
 
-```
-npm link
-```
+A reader hits an error message already stuck and looking for a way out. Nielsen Norman Group's guidance on error messages is specific: plain language, a precise account of what happened, one constructive next step, no blame placed on the reader. "The upload failed. Check your connection and try again" does the job. "You uploaded an invalid file" does not, even though both pass a grammar check.
 
-Or run it without linking, from inside this folder:
+A reader scans a headline; they do not read it. Nielsen Norman Group's research on how people read on screens found most visitors take in a minority of the words on a page. The first few words of a heading carry the weight the rest of the sentence never gets.
 
-```
-node dist/cli.js <command>
-```
+A reader clicks a button speaking to them, not about them. A widely cited test from Unbounce, run by Michael Aagaard, swapped "Start your free trial" for "Start my free trial." Clicks rose by roughly ninety percent. Later replications land in a smaller range, but the direction holds: first person in a call to action beats second person, often by a wide margin.
 
-Add your Anthropic API key. Copy `.env.example` to `.env` in whatever
-project you run CopyShed against, or export the variable directly:
+copyshed classifies each string by the role it plays: a call to action, an error, a success message, a headline, a label, or body text. It hands the model role-specific guidance drawn from this research, instead of one blanket voice for every string in your product.
 
-```
-cp .env.example .env
-# then edit .env and set ANTHROPIC_API_KEY
-```
+The line it will not cross
 
-`scan` and `check` never call the API and work with no key at all.
+Real trust signals move a decision: a specific number, a named result, an honest deadline. copyshed encourages all three. It will not manufacture the fourth kind, the fake one. Harry Brignull, who first named these tricks dark patterns and later folded them into the broader term deceptive patterns, catalogued manufactured urgency and confirm-shaming as two of the most common moves in commercial UI copy. copyshed flags both. A countdown timer with no real deadline behind it, and a decline option worded to make the reader feel foolish for saying no, both get a warning instead of a rewrite playing along.
 
-## Commands
+This is a line, not a suggestion. Persuasion needing a lie to work is not persuasion. It is a trick, and it costs you the reader's trust the moment they notice. Readers notice.
 
-### `copyshed init`
+The score
 
-Writes `copyshed.config.json` in the current directory. Prompts for your
-target audience, brand voice, and goals, or pass `-y` to accept the
-defaults and edit the file by hand afterward.
+Run audit and every string gets a heuristic clarity score from zero to a hundred: reading grade, passive voice density, vague quantifiers, banned words, an em dash if one slipped through. Say this plainly, because a number this easy to read invites overconfidence: the score is a smoke alarm, not a verdict. It does not tell you if a claim is true. It does not tell you if a joke lands. It exists so a team spends its limited review time on the things a script has no way to judge, and skips the strings a script already caught.
 
-### `copyshed scan [paths...]`
+Commands
 
-Lists every candidate string CopyShed finds, with no API call. Good for
-checking your `include`/`exclude`/allowlist settings before spending
-tokens on a real rewrite pass. Add `--json` for machine-readable output.
+copyshed init writes a config file and asks who reads your copy, what your brand voice sounds like, and what this copy needs to accomplish.
 
-### `copyshed check [paths...]`
+copyshed scan lists strings without calling a model. Free, instant, a first look at what copyshed would touch.
 
-Runs the hard rules against copy that is already in your codebase. No API
-key needed, no network call, safe to run in CI or a pre-commit hook.
-Exits with code 1 if any string breaks a hard rule, 0 otherwise. This is
-the command that gives you "team style guide enforcement across the
-codebase" without spending a single API call.
+copyshed check fails the build on a hard rule violation. No API key required. Put this in CI today.
 
-```
-copyshed check --json
-```
+copyshed audit scores existing copy for clarity and specificity. No API key required. Put this next to check, or run it alone to find your worst offenders before touching a single line.
 
-### `copyshed rewrite [paths...]`
+copyshed rewrite calls the model, validates every suggestion, and walks you through each one with a diff and a before-and-after clarity score. Add the dry-run flag to save a report without touching a file. Add -y to accept every passing suggestion and skip the rest.
 
-The main flow. Extracts candidates, sends each to Claude, validates the
-result, retries on failure, then walks you through an interactive review:
-accept, edit, skip, accept all remaining clean suggestions, or quit and
-save progress. Accepted changes get written back immediately, in place,
-without reformatting the rest of the file.
+copyshed apply reviews and applies a saved report, later, on your own schedule.
 
-Flags:
+Configuring the voice
 
-- `-y, --yes` — non-interactive. Applies every suggestion that passes
-  validation outright and skips anything that needed a retry or came back
-  unchanged. Use this in a script or an editor's on-save hook.
-- `--dry-run` — calls the model and saves a report to `.copyshed/`, but
-  never touches a file and never prompts. Pair with `copyshed apply`
-  later. This is the "safe preview" step.
-- `-m, --model <name>` — override the model for this run.
-- `--max-retries <n>` — override the retry count for this run.
-- `-c, --config <path>` — use a config file somewhere other than
-  `./copyshed.config.json`.
+copyshed.config.json holds your target audience, your brand voice, your goals, and any words or phrases your team bans on top of the built-in list. It also holds the key lists telling copyshed which strings play which role: cta_keys, error_keys, success_keys, headline_keys, label_keys. A project with an unusual naming scheme should edit these directly rather than fight the defaults.
 
-### `copyshed apply`
+reading_level_target sets the reading grade audit and rewrite aim for. Eight is the default, in the range most consumer-facing writing advice recommends. Raise it for a technical audience. Lower it for a general one.
 
-Reviews and applies a report saved by `rewrite --dry-run`. This is the
-"one-click apply" step, and it is what an editor's on-save/on-accept
-integration would call: run `rewrite --dry-run --paths <file>` when the
-file saves, show the diff in your own UI, and call
-`apply --yes --paths <file>` when the person accepts it.
+Where this came from
 
-- `-r, --report <path>` — a specific report file. Defaults to the most
-  recent one.
-- `-y, --yes` — apply every suggestion already accepted or clean, no
-  prompts.
-- `-p, --paths <patterns...>` — only apply entries whose file matches.
-
-## Configuration
-
-`copyshed.config.json`, written by `init` or edited by hand. See
-`copyshed.config.example.json` for a filled-in reference.
-
-| Key                    | What it controls                                                      |
-| ----------------------- | ---------------------------------------------------------------------- |
-| `target_audience`      | Who reads this copy. Goes straight into the model's instructions.     |
-| `brand_voice`          | A few words describing tone.                                          |
-| `goals`                | What the copy should accomplish.                                      |
-| `extra_banned_words`   | Project-specific words on top of the built-in list.                   |
-| `extra_banned_phrases` | Project-specific phrases on top of the built-in list.                 |
-| `include` / `exclude`  | Glob patterns for which files to scan.                                |
-| `attribute_allowlist`  | JSX attribute names treated as UI copy (`label`, `placeholder`, ...). |
-| `key_allowlist`        | Object/JSON key names treated as UI copy (`title`, `message`, ...).   |
-| `call_allowlist`       | Function names whose first string argument counts (`t`, `i18n.t`).    |
-| `model`                | Which Claude model to call.                                           |
-| `max_retries`          | How many times to send validation feedback back to the model.         |
-| `temperature`          | Sampling temperature for the rewrite call.                            |
-
-The banned word and phrase list itself, and the hard/soft rule
-descriptions, live in `src/rules/writingRules.ts`. They are not
-config-driven on purpose: they are the floor every project shares.
-`extra_banned_words` and `extra_banned_phrases` only ever add to that
-floor, never subtract from it.
-
-## What this does not do
-
-It does not touch Python, Go, Rust, or any language outside the
-JS/TS/JSX/TSX/JSON family; the extractor is Babel-based, so it stops
-there for now. It does not guarantee the soft rules; it enforces the hard
-ones and flags the rest for a human. It does not run inside an editor by
-itself; the `--dry-run` plus `apply` pair is the seam a plugin would call,
-but writing that plugin is a separate project. And it will not fix a
-string whose meaning depends on business context CopyShed does not have;
-`target_audience`, `brand_voice`, and `goals` are the only context you
-get to hand it, so a vague config produces vague rewrites.
-
-## Project layout
-
-```
-src/
-  cli.ts              command wiring
-  config.ts            config schema, defaults, loader
-  rules/
-    writingRules.ts    the house style, baked in
-    validator.ts        hard-rule checker + soft-rule heuristics
-  extract/
-    jsExtractor.ts      Babel-based extraction for JS/TS/JSX/TSX
-    jsonExtractor.ts     leaf-string extraction for JSON locale files
-    extractor.ts         dispatch by file extension
-  ai/
-    client.ts            Anthropic SDK wrapper
-    prompt.ts             system/user prompt construction
-    rewrite.ts            call + validate + retry loop
-  patch/
-    applyPatch.ts         MagicString-based in-place file patching
-  cache/
-    cache.ts              report read/write for dry-run + apply
-  ui/
-    diff.ts, table.ts, prompts.ts   terminal rendering and review flow
-  commands/
-    init.ts, scan.ts, rewrite.ts, apply.ts, check.ts
-```
+Every claim about persuasion and reading behavior in this README traces back to a named source: Fogg's behavior model, Nielsen Norman Group's error-message and reading-behavior research, the Aagaard button-copy test, Cialdini's principles of influence, Brignull's cataloguing of deceptive patterns. None of it is copyshed's invention. copyshed's job is smaller and more useful: put this research in front of the model at the exact moment it writes your copy, then check the result against a floor no amount of persuasive flourish gets to lower.

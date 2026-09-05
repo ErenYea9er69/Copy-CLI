@@ -6,6 +6,7 @@ import { scanCommand } from "./commands/scan.js";
 import { rewriteCommand } from "./commands/rewrite.js";
 import { applyCommand } from "./commands/apply.js";
 import { checkCommand } from "./commands/check.js";
+import { auditCommand } from "./commands/audit.js";
 import { log } from "./utils/logger.js";
 
 const program = new Command();
@@ -64,6 +65,17 @@ program
   .option("--json", "print machine-readable JSON instead of a table")
   .action(async (paths, opts) => {
     await checkCommand(paths, opts);
+  });
+
+program
+  .command("audit")
+  .description("score existing copy for clarity and specificity (reading grade, passive voice, vague quantifiers). No API key needed, safe for CI.")
+  .argument("[paths...]", "glob patterns to scan, defaults to the config's include list")
+  .option("-c, --config <path>", "path to copyshed.config.json")
+  .option("--json", "print machine-readable JSON instead of a table")
+  .option("--threshold <n>", "minimum passing clarity score, 0-100", (v) => parseInt(v, 10))
+  .action(async (paths, opts) => {
+    await auditCommand(paths, opts);
   });
 
 program.parseAsync(process.argv).catch((err) => {

@@ -1,19 +1,20 @@
-import { BANNED_WORD_ROOTS, BANNED_PHRASES, EM_DASH_PATTERN } from "./writingRules.js";
+import { BANNED_WORD_ROOTS, BANNED_PHRASES, EM_DASH_PATTERN, bannedWordPattern } from "./writingRules.js";
+import { MANUFACTURED_URGENCY_PATTERNS, CONFIRM_SHAME_PATTERNS, type CopyRole } from "./psychology.js";
+import { vagueQuantifierHits } from "./score.js";
 import type { RuleViolation } from "../extract/types.js";
 
-function wordRootPattern(root: string): RegExp {
-  // Word boundary, the root, then any trailing word characters to catch
-  // plural and tense suffixes ("harness" -> "harnessing", "harnessed").
-  const escaped = root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`\\b${escaped}\\w*`, "i");
-}
+/** A rough imperative-verb check for CTA strings: the first word should read like an action, not a noun. Short list on purpose; it exists to catch the common miss ("Submission", "Confirmation") not to police every verb in English. */
+const CTA_NOUN_ENDINGS = /^(the\s+)?\w+(tion|ment|ance|ence)\b/i;
+
+/** Phrases that put the blame on the reader rather than describing what happened. */
+const BLAME_PATTERNS: RegExp[] = [/\byou\s+(failed|didn'?t|forgot|entered\s+an?\s+invalid)\b/i];
 
 function phrasePattern(phrase: string): RegExp {
   const parts = phrase.split(/\s+/).map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return new RegExp(`\\b${parts.join("\\s+")}\\b`, "i");
 }
 
-const WORD_PATTERNS = BANNED_WORD_ROOTS.map((root) => ({ root, pattern: wordRootPattern(root) }));
+const WORD_PATTERNS = BANNED_WORD_ROOTS.map((root) => ({ root, pattern: bannedWordPattern(root) }));
 const PHRASE_PATTERNS = BANNED_PHRASES.map((phrase) => ({ phrase, pattern: phrasePattern(phrase) }));
 
 const PLACEHOLDER_PATTERN = /\{\{[^}]+\}\}|\{[^}]+\}|%[sd]|\$\{[^}]+\}/g;
@@ -81,9 +82,11 @@ export function checkHardRules(text: string): RuleViolation[] {
 
 /**
  * Light heuristics for the rules a script cannot verify with certainty.
- * These come back as warnings, never as blocking errors.
+ * These come back as warnings, never as blocking errors. Pass the copy's
+ * inferred role (see rules/psychology.ts) to unlock the role-specific
+ * checks; omit it and only the role-independent checks run.
  */
-export function checkSoftRules(text: string): RuleViolation[] {
+export function checkSoftRules(text: string, role?: CopyRole): RuleViolation[] {
   const warnings: RuleViolation[] = [];
 
   if (/!/.test(text)) {
@@ -131,6 +134,58 @@ export function checkSoftRules(text: string): RuleViolation[] {
     });
   }
 
+  const vague = vagueQuantifierHits(text);
+  if (vague.length > 0) {
+    warnings.push({
+      rule: "vague-quantifier",
+      detail: `uses a vague quantifier (${vague.join(", ")}) where a real number might exist`,
+      severity: "warning",
+    });
+  }
+
+  for (const pattern of MANUFACTURED_URGENCY_PATTERNS) {
+    if (pattern.test(text)) {
+      warnings.push({
+        rule: "manufactured-urgency",
+        detail: "reads like invented urgency, confirm the deadline or scarcity is real before shipping this",
+        severity: "warning",
+      });
+      break;
+    }
+  }
+
+  for (const pattern of CONFIRM_SHAME_PATTERNS) {
+    if (pattern.test(text)) {
+      warnings.push({
+        rule: "confirm-shame",
+        detail: "phrases a decline option as a foolish choice for the reader, this is a known deceptive pattern",
+        severity: "warning",
+      });
+      break;
+    }
+  }
+
+  if (role === "cta" && CTA_NOUN_ENDINGS.test(text.trim())) {
+    warnings.push({
+      rule: "cta-not-imperative",
+      detail: "this is a call to action but opens with a noun, not a verb naming the outcome",
+      severity: "warning",
+    });
+  }
+
+  if (role === "error") {
+    for (const pattern of BLAME_PATTERNS) {
+      if (pattern.test(text)) {
+        warnings.push({
+          rule: "error-blames-reader",
+          detail: "puts the fault on the reader instead of describing what happened",
+          severity: "warning",
+        });
+        break;
+      }
+    }
+  }
+
   return warnings;
 }
 
@@ -158,7 +213,8 @@ export function validateRewrite(
   original: string,
   rewrite: string,
   extraBannedWords: string[] = [],
-  extraBannedPhrases: string[] = []
+  extraBannedPhrases: string[] = [],
+  role?: CopyRole
 ): { errors: RuleViolation[]; warnings: RuleViolation[] } {
   const errors: RuleViolation[] = [
     ...checkHardRules(rewrite),
@@ -166,7 +222,7 @@ export function validateRewrite(
   ];
 
   for (const word of extraBannedWords) {
-    if (wordRootPattern(word).test(rewrite)) {
+    if (bannedWordPattern(word).test(rewrite)) {
       errors.push({ rule: "banned-word-project", detail: `contains project-banned word "${word}"`, severity: "error" });
     }
   }
@@ -176,6 +232,6 @@ export function validateRewrite(
     }
   }
 
-  const warnings = checkSoftRules(rewrite);
+  const warnings = checkSoftRules(rewrite, role);
   return { errors, warnings };
 }

@@ -8,9 +8,15 @@ export type ReviewChoice = "accept" | "edit" | "skip" | "accept-all-clean" | "qu
 export async function reviewOne(result: RewriteResult, index: number, total: number): Promise<{ choice: ReviewChoice; edited?: string }> {
   const { candidate } = result;
   console.log("");
-  console.log(chalk.dim(`[${index + 1}/${total}] ${candidate.file}:${candidate.line} (${candidate.source}${candidate.contextName ? " " + candidate.contextName : ""})`));
+  const roleTag = result.role ? chalk.dim(` [${result.role}]`) : "";
+  console.log(chalk.dim(`[${index + 1}/${total}] ${candidate.file}:${candidate.line} (${candidate.source}${candidate.contextName ? " " + candidate.contextName : ""})`) + roleTag);
   console.log(renderInlineDiff(candidate.value, result.rewrite));
   if (result.rationale) console.log(chalk.dim(`  ${result.rationale}`));
+  if (result.scoreBefore != null && result.scoreAfter != null) {
+    const delta = result.scoreAfter - result.scoreBefore;
+    const deltaText = delta > 0 ? chalk.green(`+${delta}`) : delta < 0 ? chalk.red(`${delta}`) : chalk.dim("+0");
+    console.log(chalk.dim(`  clarity score: ${result.scoreBefore} -> ${result.scoreAfter} (${deltaText})`));
+  }
 
   if (result.status === "needs_review") {
     console.log(chalk.red(`  needs review after ${result.attempts} attempt(s):`));
