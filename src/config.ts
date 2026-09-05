@@ -57,9 +57,10 @@ export const ConfigSchema = z.object({
       "body",
       "text",
       "copy",
+      "headline",
     ]),
   call_allowlist: z.array(z.string()).default(["t", "i18n.t", "formatMessage", "translate"]),
-  model: z.string().default("claude-sonnet-5"),
+  model: z.string().default("claude-3-5-sonnet-latest"),
   max_retries: z.number().int().min(0).max(5).default(2),
   temperature: z.number().min(0).max(1).default(0.4),
 
@@ -74,7 +75,8 @@ export const ConfigSchema = z.object({
   success_keys: z.array(z.string()).default(["success"]),
   headline_keys: z
     .array(z.string())
-    .default(["title", "heading", "header", "subtitle", "h1", "h2", "h3", "h4", "h5", "h6"]),
+    .default(["title", "heading", "header", "subtitle", "headline", "h1", "h2", "h3", "h4", "h5", "h6"]),
+
   label_keys: z
     .array(z.string())
     .default(["label", "placeholder", "tooltip", "helpertext", "alt", "aria-label", "aria-description"]),

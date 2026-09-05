@@ -36,13 +36,36 @@ export async function rewriteCommand(args: string[]) {
   spinner.start();
   const startedAt = Date.now();
 
-  const results = await rewriteCandidates(candidates, config, (done, total, current) => {
-    spinner.text = spinnerProgress(done, total, `${current.file}:${current.line}`, startedAt);
-  });
+  let results;
+  try {
+    results = await rewriteCandidates(candidates, config, (done, total, current) => {
+      spinner.text = spinnerProgress(done, total, `${current.file}:${current.line}`, startedAt);
+    });
+  } catch (err: any) {
+    spinner.fail("AI rewriting paused.");
+    log.blank();
+    log.block(
+      "AI API Key Required",
+      [
+        `${palette.warn(sym.warn)} ${err.message}`,
+        "",
+        "To enable AI rewriting, set any supported key in your .env file:",
+        `  ${palette.accent("• ANTHROPIC_API_KEY")} (Claude 3.5 / 3.7 Sonnet)`,
+        `  ${palette.accent("• GEMINI_API_KEY")}    (Google Gemini 2.0 Flash)`,
+        `  ${palette.accent("• OPENAI_API_KEY")}    (GPT-4o / GPT-4o-mini)`,
+        `  ${palette.accent("• GROQ_API_KEY")}      (Llama 3.3 70B via Groq)`,
+        `  ${palette.accent("• DEEPSEEK_API_KEY")}  (DeepSeek Chat)`,
+      ],
+      "warn"
+    );
+    log.blank();
+    return;
+  }
 
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
   spinner.succeed(`Copy generation complete  ${palette.muted(`(${elapsed}s)`)}`);
   log.blank();
+
 
   const ok = results.filter((r) => r.status === "ok").length;
   const unchanged = results.filter((r) => r.status === "unchanged").length;

@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import MagicString from "magic-string";
 import type { RewriteResult } from "../extract/types.js";
+import { createBackup } from "../cache/cache.js";
 
 function jsonEscape(value: string, filePath: string): string {
   // JSON locale files need a JSON-escaped replacement; JS/TS/JSX source
@@ -15,11 +16,9 @@ export interface ApplySummary {
 }
 
 /**
- * Writes accepted rewrites to disk. Groups by file so every accepted
- * change in a file lands in a single write. Offsets come from the
- * original parse, and MagicString resolves overlapping overwrite() calls
- * against the original string regardless of call order, so this is safe
- * even when a file has several accepted candidates.
+ * Writes accepted rewrites to disk.
+ * Automatically takes a pre-modification snapshot backup of all affected files
+ * before writing any changes, enabling instant /restore rollback.
  */
 export async function applyResults(results: RewriteResult[]): Promise<ApplySummary[]> {
   const byFile = new Map<string, RewriteResult[]>();
@@ -27,6 +26,12 @@ export async function applyResults(results: RewriteResult[]): Promise<ApplySumma
     const list = byFile.get(r.candidate.file) ?? [];
     list.push(r);
     byFile.set(r.candidate.file, list);
+  }
+
+  // Automated pre-modification backup
+  const filesToModify = [...byFile.keys()];
+  if (filesToModify.length > 0) {
+    await createBackup(filesToModify);
   }
 
   const summaries: ApplySummary[] = [];
